@@ -3,6 +3,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 
+'''
+Runs a simple open-loop simulation with an EKF, noisy measurements, 
+and noisy motion. 
+'''
+
 N = 1000
 version = 'basic'
 

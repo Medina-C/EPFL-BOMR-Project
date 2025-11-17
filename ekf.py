@@ -1,13 +1,15 @@
 import numpy as np
 from numpy import sin, cos
 
+# TODO this uses motor rotational speeds
+# should take linear bc thymio docs give us that
 class EKF:
 
     def __init__(self, motion_var, measure_var, model, state0, wheel_rad, robot_wd, dt):
         self.Q = motion_var
         self.R = measure_var
         self.P = self.R
-        self.state = state0
+        self.state = np.array(state0)
         self.r = wheel_rad
         self.T = robot_wd
         self.dt = dt
