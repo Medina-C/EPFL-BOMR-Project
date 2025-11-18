@@ -3,7 +3,8 @@
 
 general = {
     'dt': 0.01,
-    'goal_buffer': 20,
+    'goal_buffer': 2,
+    'drive_vel': 80,
 }
 
 robot = {
@@ -14,12 +15,12 @@ robot = {
 }
 
 ekf = {
-    'move_std': 0.01,
-    'measure_std': 0.03,
+    'move_std': 0.0002,
+    'measure_std': 0.0001,
 }
 
 astolfi = {
-    'kp': 4,
+    'kp': 0.1,
     'ka': 12,
-    'kb': -4,
+    'kb': -0.1,
 }

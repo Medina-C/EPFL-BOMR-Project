@@ -33,10 +33,9 @@ async def main():
     # EKF initialization
     ekf = EKF(
         (constants.ekf['move_std']**2)*np.eye(len(start_pose)), 
-        (constants.ekf['measure']**2)*np.eye(len(start_pose)),
+        (constants.ekf['measure_std']**2)*np.eye(len(start_pose)),
         'basic',
         start_pose,
-        constants.robot['wheel_rad'],
         constants.robot['wheel_base'],
         constants.general['dt']
     )

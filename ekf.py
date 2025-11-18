@@ -5,12 +5,11 @@ from numpy import sin, cos
 # should take linear bc thymio docs give us that
 class EKF:
 
-    def __init__(self, motion_var, measure_var, model, state0, wheel_rad, robot_wd, dt):
+    def __init__(self, motion_var, measure_var, model, state0, robot_wd, dt):
         self.Q = motion_var
         self.R = measure_var
         self.P = self.R
         self.state = np.array(state0)
-        self.r = wheel_rad
         self.T = robot_wd
         self.dt = dt
         self.model = model
@@ -33,11 +32,11 @@ class EKF:
 
     def motion_basic(self, x, u):
         px0, py0, th0 = x[0], x[1], x[2]
-        ul, ur = u[0], u[1]
-        dt, r, T = self.dt, self.r, self.T
+        vl, vr = u[0], u[1]
+        dt, T = self.dt, self.T
 
-        v = r*(ul + ur) / 2
-        w = r*(ul - ur) / T
+        v = (vl + vr) / 2
+        w = (vl - vr) / T
 
         px1 = px0 + v*cos(th0)*dt
         py1 = py0 + v*sin(th0)*dt
@@ -47,11 +46,11 @@ class EKF:
 
     def motion_jac_basic(self, x, u):
         px0, py0, th0 = x[0], x[1], x[2]
-        ul, ur = u[0], u[1]
-        dt, r, T = self.dt, self.r, self.T
+        vl, vr = u[0], u[1]
+        dt, T = self.dt, self.T
 
-        v = r*(ul + ur) / 2
-        w = r*(ul - ur) / T
+        v = (vl + vr) / 2
+        w = (vl - vr) / T
 
         return np.array([
             [1,     0,      -v*sin(th0)*dt],
@@ -71,21 +70,21 @@ class EKF:
 
     def motion_complex(self, x, u):
         px0, py0, v0, th0, w0 = x[0], x[1], x[2], x[3], x[4]
-        ul, ur = u[0], u[1]
-        dt, r, T = self.dt, self.r, self.T
+        vl, vr = u[0], u[1]
+        dt, T = self.dt, self.T
 
         px1 = px0 + v0*cos(th0)*dt
         py1 = py0 + v0*sin(th0)*dt
-        v1 = r*(ul + ur)/2
+        v1 = (vl + vr)/2
         th1 = th0 + w0*dt
-        w1 = r*(ur - ul)/T
+        w1 = (vr - vl)/T
 
         return np.array([px1, py1, v1, th1, w1])
 
     def motion_jac_complex(self, x, u):
         px0, py0, v0, th0, w0 = self.state[0], self.state[1], self.state[2], self.state[3], self.state[4]
-        ul, ur = u[0], u[1]
-        dt, r, T = self.dt, self.r, self.T
+        vl, vr = u[0], u[1]
+        dt, T = self.dt, self.T
 
         return np.array([
             [1,     0,      -v0*sin(th0)*dt,    cos(th0)*dt,    0],
