@@ -8,20 +8,30 @@ def do_astolfi(start, goal):
     dx = x1 - x0
     dy = y1 - y0
 
+    inputs = []
+
+    # Initial p, a, b
     p = np.sqrt(dx**2 + dy**2)
     a = -th0 + np.arctan2(dy, dx)
     b = (th1 - th0) - a
-    print(p, a, b)
 
-    v = astolfi['kp']*p
-    w = astolfi['ka']*a + astolfi['kb']*b
+    while p > general['goal_buffer']:
+        # Convert from p, a, b to velocities
+        v = astolfi['kp']*p
+        w = astolfi['ka']*a + astolfi['kb']*b
 
-    vl = v - w*robot['wheel_base']/2
-    vr = v + w*robot['wheel_base']/2
+        vl = v + w*robot['wheel_base']/2
+        vr = v - w*robot['wheel_base']/2
 
-    # Normalize
-    avg_vel = (abs(vl)+abs(vr))/2
-    vl = vl / avg_vel * general['drive_vel']
-    vr = vr / avg_vel * general['drive_vel']
+        inputs.append((vl, vr))
 
-    return vl, vr
+        # Update p, a, b
+        dp = -astolfi['kp']*p*np.cos(a)
+        da = astolfi['kp']*np.sin(a) - astolfi['ka']*a - astolfi['kb']*b
+        db = -astolfi['kp']*np.sin(a)
+
+        p = p + dp*general['dt']
+        a = a + da*general['dt']
+        b = b + db*general['dt']
+
+    return inputs

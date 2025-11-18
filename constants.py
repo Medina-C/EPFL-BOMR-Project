@@ -15,12 +15,12 @@ robot = {
 }
 
 ekf = {
-    'move_std': 0.0002,
-    'measure_std': 0.0001,
+    'move_std': 0.05,
+    'measure_std': 5,
 }
 
 astolfi = {
-    'kp': 0.1,
+    'kp': 4,
     'ka': 12,
-    'kb': -0.1,
+    'kb': -4,
 }
