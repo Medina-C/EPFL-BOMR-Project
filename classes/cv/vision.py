@@ -17,7 +17,7 @@ class Vision:
         self.aruco_dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_6X6_50)
         params = cv.aruco.DetectorParameters()
         self.detector = cv.aruco.ArucoDetector(self.aruco_dict, params)
-        self.camera_calib = np.load('vision_auxiliary/camera_calib_param.npz')
+        self.camera_calib = np.load('classes\\cv\\vision_auxiliary\\camera_calib_param.npz')
         self.frame_raw = None
         self.frame_undist = None
         self.frame_flat = None
@@ -150,7 +150,7 @@ class Vision:
         kernel = np.ones((3, 3), np.uint8)
         threshold = cv.morphologyEx(threshold, cv.MORPH_OPEN, kernel, iterations=1)
 
-        cv.imwrite("debug_threshold.png", threshold)
+        cv.imwrite("classes/cv/results/debug_threshold.png", threshold)
 
         # ------------------------
         # 2. Find contours
@@ -203,7 +203,7 @@ class Vision:
         debug = img.copy()
         for obs in obstacles:
             cv.polylines(debug, [obs["vertices_px"].astype(int)], True, (0, 0, 255), 2)
-        cv.imwrite("debug_obstacles.png", debug)
+        cv.imwrite("classes/cv/results/debug_obstacles.png", debug)
 
         return obstacles
 
@@ -225,8 +225,8 @@ class Vision:
         display_frame = cv.resize(frame_show, (DISP_FRAME_W, DISP_FRAME_H))
 
         if save_frames:
-            cv.imwrite('results/frame_raw.png', self.frame_raw)
-            cv.imwrite('results/frame_undist.png', self.frame_undist)
+            cv.imwrite('classes/cv/results/frame_raw.png', self.frame_raw)
+            cv.imwrite('classes/cv/results/frame_undist.png', self.frame_undist)
         
         if find_flat:
             ret = self.compute_Homography(self.corners, self.ids)
@@ -238,7 +238,7 @@ class Vision:
                 if self.frame_flat is not None:
                     print('[VISION] flat map created successfully')
                     if save_frames:
-                        cv.imwrite('results/frame_flat.png', self.frame_flat)
+                        cv.imwrite('classes/cv/results/frame_flat.png', self.frame_flat)
 
         if find_obstacles and self.frame_flat is not None:
             self.find_obstacle_vertices(self.frame_flat)
