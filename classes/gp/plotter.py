@@ -8,7 +8,7 @@ class Plotter:
 
     def _setup_axes(self, ax, title):
         ax.set_xlim(0, self.planner.width)
-        ax.set_ylim(0, self.planner.height)
+        ax.set_ylim(self.planner.height, 0)
         ax.set_xlabel("x")
         ax.set_ylabel("y")
         ax.set_aspect("equal", "box")
