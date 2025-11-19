@@ -3,7 +3,7 @@ from typing import List
 import networkx as nx
 from shapely.geometry import LineString
 
-from utils import Point, dist, same
+from .utils import Point, dist, same
 
 
 class VisibilityGraph:

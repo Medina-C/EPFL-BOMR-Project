@@ -5,8 +5,8 @@ import numpy as np
 from shapely.geometry import Polygon
 import networkx as nx
 
-from utils import Point, dist
-from graph import VisibilityGraph
+from .utils import Point, dist
+from .graph import VisibilityGraph
 
 
 class GlobalPlanner:
