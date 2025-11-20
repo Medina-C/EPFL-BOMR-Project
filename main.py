@@ -2,6 +2,9 @@ import constants
 from ekf import EKF
 from motion_control import do_astolfi
 
+from classes.gp import GlobalPlanner, Plotter
+from classes.cv import Vision
+
 import numpy as np
 from tdmclient import ClientAsync
 
