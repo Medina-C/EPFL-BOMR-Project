@@ -1,4 +1,4 @@
-import utils.constants as constants
+import constants as constants
 from classes.ekf import EKF
 from classes.motion_control import do_astolfi_cl
 
