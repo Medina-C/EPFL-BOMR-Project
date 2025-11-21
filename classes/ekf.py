@@ -36,7 +36,7 @@ class EKF:
         dt, T = self.dt, self.T
 
         v = (vl + vr) / 2
-        w = (vl - vr) / T
+        w = (vr - vl) / T
 
         px1 = px0 + v*cos(th0)*dt
         py1 = py0 + v*sin(th0)*dt

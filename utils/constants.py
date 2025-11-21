@@ -2,9 +2,12 @@
    so main.py isn't as cluttered'''
 
 general = {
-    'dt': 0.01,
-    'goal_buffer': 2,
-    'drive_vel': 80,
+    'dt': 0.12,
+    'goal_buffer': 50,
+    'drive_vel': 130,
+    'max_vel': 130,
+    'max_accel': 20000,
+    'max_w': 0.7,
 }
 
 robot = {
@@ -15,12 +18,18 @@ robot = {
 }
 
 ekf = {
-    'move_std': 0.05,
-    'measure_std': 5,
+    'move_std': 5,
+    'measure_std': 1,
 }
 
 astolfi = {
     'kp': 4,
-    'ka': 12,
+    'ka': 30,
     'kb': -4,
+}
+
+pid = { # p, a, b
+    'p': (10, 0, 0),
+    'i': (0, 0, 0),
+    'd': (0, 0, 0)
 }
