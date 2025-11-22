@@ -20,7 +20,7 @@ async def main():
     # TODO CV and path initialization stuff
 
 
-    start_pose = (200, 200, 0, 0.182, 0)
+    start_pose = (200, 200, 0, np.pi/2-0.182, 0)
     # goals = [
     #     (0, 300, np.pi/2),
     #     (0, 600, np.pi/2),
@@ -111,7 +111,6 @@ def init_global_path():
             d[i] *= 10
 
     planner = GlobalPlanner(cv_data, radius=constants.planning['radius'], spacing=constants.planning['spacing'])
-    plotter = Plotter(planner)
 
     segments = planner.plan()
     for i in range(len(segments)):
@@ -122,7 +121,7 @@ def cv_coords_to_robot(x, y, th=None):
     if th is None: 
         return y, x
     else:
-        return y, x, th
+        return y, x, np.pi/2 - th
 
 # Helper function for setting motor values
 # takes LINEAR SPEEDS in mm/s as input
