@@ -1,4 +1,4 @@
-from constants import astolfi, robot, general, pid
+from constants import astolfi, robot, general
 import numpy as np
 
 

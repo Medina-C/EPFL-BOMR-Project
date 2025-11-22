@@ -3,8 +3,8 @@ import numpy as np
 from classes.gp import GlobalPlanner, Plotter
 from classes.cv import Vision
 
-RADIUS = 2.0
-SPACING = 5.0
+RADIUS = 60
+SPACING = 500
 
 # Vision code either here
 # Create data with vision...
@@ -23,6 +23,10 @@ data = [
         np.array([240, 180]),
     ]
 
+for d in data:
+    for i in range(len(d)):
+        d[i] *= 10
+
 
 if __name__ == "__main__":
     # Or Vision code here
@@ -37,3 +41,5 @@ if __name__ == "__main__":
     plotter.plain()
     plotter.visibility()
     plotter.path()
+
+    print(segments)

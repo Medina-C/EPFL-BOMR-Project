@@ -28,8 +28,7 @@ astolfi = {
     'kb': -4,
 }
 
-pid = { # p, a, b
-    'p': (10, 0, 0),
-    'i': (0, 0, 0),
-    'd': (0, 0, 0)
+planning = {
+    'radius': 60,
+    'spacing': 50,
 }

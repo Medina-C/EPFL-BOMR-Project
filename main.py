@@ -12,16 +12,6 @@ from time import time
 
 state = 'global_nav'
 
-# Setup tdm client
-async def init_tdm():
-    global node, state
-    node = await client.wait_for_node()
-    await node.lock()
-    await node.wait_for_variables()
-    await node.watch(variables=True)
-    node.add_variables_changed_listener(variables_changed)
-    print("Initialized")
-
 # Main program
 async def main():
     global node, state
@@ -29,14 +19,15 @@ async def main():
     
     # TODO CV and path initialization stuff
 
-    # TODO dummy values to change
-    start_pose = (0, 0, 0, np.pi/2, 0)
-    goals = [
-        (0, 300, np.pi/2),
-        (0, 600, np.pi/2),
-        (300, 600, 0),
-        (600, 600, 0),
-    ]
+
+    start_pose = (200, 200, 0, 0.182, 0)
+    # goals = [
+    #     (0, 300, np.pi/2),
+    #     (0, 600, np.pi/2),
+    #     (300, 600, 0),
+    #     (600, 600, 0),
+    # ]
+    goals = init_global_path()
     g = 0
     goal_pose = goals[g]
 
@@ -67,14 +58,12 @@ async def main():
                 print("Reached goal!")
                 state = 'stop'
                 break
-        print(f"2 - {time()-t}")
         # elif obstacle_detected():
         #     state = 'local_nav'
 
         # Act based on states
         if state == 'global_nav':
             await global_nav(current_pose, goal_pose, t)
-            print(f"4 - {time()-t}")
         elif state == 'local_nav':
             await local_nav()
         else:
@@ -94,6 +83,46 @@ async def main():
     plt.figure()
     plt.plot([state[3] for state in state_log])
     plt.show()
+
+# Setup tdm client
+async def init_tdm():
+    global node, state
+    node = await client.wait_for_node()
+    await node.lock()
+    await node.wait_for_variables()
+    await node.watch(variables=True)
+    node.add_variables_changed_listener(variables_changed)
+    print("Initialized")
+
+def init_global_path():
+    cv_data = [
+        [260.0, 200.0],
+        np.array([[60, 40], [90, 40], [90, 80], [60, 80]]),
+        np.array([[130, 40], [200, 40], [200, 70], [130, 70]]),
+        np.array([[120, 120], [160, 120], [160, 170], [120, 170]]),
+        np.array([[40, 130], [70, 140], [65, 160], [35, 170], [25, 150]]),
+        np.array([[200, 110], [230, 120], [220, 145]]),
+        np.array([[180, 10], [230, 15], [225, 35], [175, 30]]),
+        np.array([20, 20]),
+        np.array([240, 180]),
+    ]
+    for d in cv_data:
+        for i in range(len(d)):
+            d[i] *= 10
+
+    planner = GlobalPlanner(cv_data, radius=constants.planning['radius'], spacing=constants.planning['spacing'])
+    plotter = Plotter(planner)
+
+    segments = planner.plan()
+    for i in range(len(segments)):
+        segments[i] = cv_coords_to_robot(*segments[i])
+    return segments
+
+def cv_coords_to_robot(x, y, th=None):
+    if th is None: 
+        return y, x
+    else:
+        return y, x, th
 
 # Helper function for setting motor values
 # takes LINEAR SPEEDS in mm/s as input
