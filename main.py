@@ -1,12 +1,15 @@
 import constants as constants
+from constants import * #TODO ugly, change
 from classes.ekf import EKF
 from classes.motion_control import do_astolfi_cl
+from classes.local_avoidance import LocalNav, read_prox
 
 from classes.gp import GlobalPlanner, Plotter
 from classes.cv import Vision
 
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 from tdmclient import ClientAsync
 from time import time
 
@@ -31,7 +34,7 @@ async def main():
     g = 0
     goal_pose = goals[g]
 
-    # EKF initialization
+    # class initialization
     ekf = EKF(
         (constants.ekf['move_std']**2)*np.eye(len(start_pose)), 
         (constants.ekf['measure_std']**2)*np.eye(len(start_pose)),
@@ -40,6 +43,7 @@ async def main():
         constants.robot['wheel_base'],
         constants.general['dt']
     )
+    local_nav = LocalNav()
     state_log = [start_pose]
 
     # Main loop
@@ -47,8 +51,9 @@ async def main():
         print(state)
         t = time()
         current_pose = get_current_pose(ekf)
+        prox = read_prox(node)
         state_log.append(current_pose)
-        print(f"1 - {time()-t}")
+
         # Conditions
         if reached_goal(current_pose, goal_pose):
             g += 1
@@ -58,14 +63,16 @@ async def main():
                 print("Reached goal!")
                 state = 'stop'
                 break
-        # elif obstacle_detected():
-        #     state = 'local_nav'
+        elif obstacle_detected(prox):
+            state = 'local_nav'
 
         # Act based on states
         if state == 'global_nav':
             await global_nav(current_pose, goal_pose, t)
         elif state == 'local_nav':
-            await local_nav()
+            cleared = await local_nav.follow_edge(node, prox)
+            if cleared:
+                state = 'global_nav'
         else:
             print(f"Invalid state {state}!")
 
@@ -191,25 +198,19 @@ def reached_goal(current, goal):
     return (abs(px - gx) < constants.general['goal_buffer'] and
         abs(py - gy) < constants.general['goal_buffer'])
 
-def obstacle_detected():
-    global node
-    prox = node['prox.horizontal']
-
-    for value in prox:
-        if value > 0:
-            return True
+def obstacle_detected(prox):
+    front = prox[IDX_FRONT]
+    left = max(prox[IDX_NO], prox[IDX_NNO])
+    right = max(prox[IDX_NNE], prox[IDX_NE])
+    front_left = prox[IDX_NNO]
+    front_right = prox[IDX_NNE]
         
-    return False
+    return front >= FRONT_THRESHOLD or front_left >= FRONT_THRESHOLD or front_right >= FRONT_THRESHOLD
 
 async def global_nav(start_pose, goal_pose, t):
     vl, vr = do_astolfi_cl(start_pose, goal_pose)
-    print(f"3 - {time()-t}")
+
     await set_motors(vl, vr)
-    
-
-async def local_nav():
-    pass
-
 
 if __name__ == "__main__":
     print("Hello, World!")
@@ -218,3 +219,5 @@ if __name__ == "__main__":
     client.close()
     print("stopped")
     print(state)
+
+    os._exit(0)
