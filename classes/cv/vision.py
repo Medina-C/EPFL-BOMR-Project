@@ -11,6 +11,8 @@ DISP_FRAME_W = 960
 DISP_FRAME_H = 540
 
 
+
+
 class Vision:
     def __init__(self, cam_index):
         self.cap = self.start_video_capture(cam_index)
@@ -26,8 +28,7 @@ class Vision:
         self.H = None
         self.scale = None
         self.obstacles = None
-        self.tags = None
-        self.frame = None
+        self.frame_disp = None
 
     def start_video_capture(self, cam_index):
         cap = cv.VideoCapture(cam_index, cv.CAP_DSHOW)
@@ -127,9 +128,6 @@ class Vision:
             return target_center_mm, target_center_px, theta
     
     def find_obstacle_vertices(self, img):
-        # ------------------------
-        # 1. Preprocessing
-        # ------------------------
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         gray = cv.GaussianBlur(gray, (5, 5), 0)
 
@@ -152,16 +150,13 @@ class Vision:
 
         cv.imwrite("classes/cv/results/debug_threshold.png", threshold)
 
-        # ------------------------
-        # 2. Find contours
-        # ------------------------
         contours, _ = cv.findContours(threshold, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
 
         obstacles = []
+        obstacle_info_gv = []
+        h_c, w_c = cropped.shape
+        obstacle_info_gv.append(np.array([w_c, h_c]))   #insert map dimensions as first array
 
-        # ------------------------
-        # 3. Minimum area filter based on real size
-        # ------------------------
         # obstacle must be at least 40x40 mm
         min_obstacle_mm = 85    #to ignore aruco tags
         min_area_px = (min_obstacle_mm / self.scale) ** 2  # convert mm² → px²
@@ -195,18 +190,13 @@ class Vision:
                 "area_px": area,
                 "num_vertices": len(approx_px),
             })
-            self.obstacles = obstacles.copy()
+            obstacle_info_gv.append(np.array(approx_mm))
+        self.obstacles = obstacle_info_gv.copy()
 
-        # ------------------------
-        # 6. Debug visualization
-        # ------------------------
         debug = img.copy()
         for obs in obstacles:
             cv.polylines(debug, [obs["vertices_px"].astype(int)], True, (0, 0, 255), 2)
         cv.imwrite("classes/cv/results/debug_obstacles.png", debug)
-
-        return obstacles
-
 
 
     def update_vision(self, save_frames, find_flat, find_obstacles):
@@ -222,7 +212,7 @@ class Vision:
         frame_show = self.frame_undist.copy()
         if self.ids is not None:
             cv.aruco.drawDetectedMarkers(frame_show, self.corners, self.ids)
-        display_frame = cv.resize(frame_show, (DISP_FRAME_W, DISP_FRAME_H))
+        self.frame_disp = cv.resize(frame_show, (DISP_FRAME_W, DISP_FRAME_H))
 
         if save_frames:
             cv.imwrite('classes/cv/results/frame_raw.png', self.frame_raw)
@@ -244,7 +234,7 @@ class Vision:
             self.find_obstacle_vertices(self.frame_flat)
             if self.obstacles is not None:
                 print('[VISION] found obstacles')
-                print(self.obstacles)
+
            
         """    if draw_tags and self.tags is not None:
             for tag in self.tags:
@@ -256,9 +246,23 @@ class Vision:
                 cx = int(round(float(cx)))
                 cy = int(round(float(cy)))
                 cv.circle(frame, (cx,cy), 20, (0,0,255), -1) """
-        return display_frame
   
-
+    def return_dummy(self):
+        data = [
+        [260.0, 200.0],
+        np.array([[60, 40], [90, 40], [90, 80], [60, 80]]),
+        np.array([[130, 40], [200, 40], [200, 70], [130, 70]]),
+        np.array([[120, 120], [160, 120], [160, 170], [120, 170]]),
+        np.array([[40, 130], [70, 140], [65, 160], [35, 170], [25, 150]]),
+        np.array([[200, 110], [230, 120], [220, 145]]),
+        np.array([[180, 10], [230, 15], [225, 35], [175, 30]]),
+        np.array([20, 20]),
+        np.array([240, 180]),
+        ]
+        return data
+    
+    def update_disp_frame(self, ):
+        if self.
 
 if __name__ == "__main__":
     vision = Vision(1)

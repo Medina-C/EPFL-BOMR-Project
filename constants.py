@@ -33,6 +33,11 @@ planning = {
     'spacing': 50,
 }
 
+tag_ids = {
+    'thymio': 4,
+    'target': 5
+}
+
 IDX_NO = 0
 IDX_NNO = 1
 IDX_FRONT = 2
