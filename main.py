@@ -12,6 +12,8 @@ import numpy as np
 import os
 from tdmclient import ClientAsync
 from time import time
+import cv2 as cv
+
 
 state = 'global_nav'
 
@@ -21,18 +23,59 @@ async def main():
     await init_tdm()
     
     # TODO CV and path initialization stuff
+    vision = Vision(1)
+     
 
+    while True:
+        vision.update_vision(True, False, False)
+        if vision.frame_disp is not None:
+            cv.imshow('frame', vision.frame_disp)
+        key = cv.waitKey(1) & 0xFF
+        if key == 27:  # ESC -> exit
+            break
+        if key == ord('h'):
+            vision.update_vision(True, True, True) 
 
-    start_pose = (200, 200, 0, np.pi/2-0.182, 0)
     # goals = [
     #     (0, 300, np.pi/2),
     #     (0, 600, np.pi/2),
     #     (300, 600, 0),
     #     (600, 600, 0),
     # ]
-    goals = init_global_path()
+
+    vision.get_tag_pose(4)
+    cv_data = []
+    if vision.obstacles is not None:
+        #print(f'obstacles={vision.obstacles}')
+        cv_data = vision.obstacles.copy()
+
+    if vision.thymio_pose is not None:
+        #print(f'pose={vision.thymio_pose}')
+        cv_data.append(vision.thymio_pose['pose_mm'].flatten())
+
+    if vision.target_pose is not None:
+        #print(f'pose={vision.target_pose}')
+        cv_data.append(vision.target_pose['pose_mm'].flatten())
+        #print(f'data+thy+tar= {cv_data}')
+    cv_data.append(np.array([100, 100]))
+    print(f'final data={cv_data}')
+
+    x = vision.thymio_pose['pose_mm'].flatten()[0]
+    y = vision.thymio_pose['pose_mm'].flatten()[1]
+    theta = vision.thymio_pose['theta']
+
+    ymax = cv_data[0][1]
+    print(f'ymax={ymax}')
+
+    x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
+    print(f'init x={x}, y={y}, theta={theta}')
+    start_pose = (x, y, 0, theta, 0)
+    
+
+    goals = init_global_path(cv_data, ymax)
     g = 0
     goal_pose = goals[g]
+    print(f'goal_pose={goal_pose}')
 
     # class initialization
     ekf = EKF(
@@ -48,9 +91,9 @@ async def main():
 
     # Main loop
     while state != 'stop':
-        print(state)
+        #print(state)
         t = time()
-        current_pose = get_current_pose(ekf)
+        current_pose = get_current_pose(ekf, vision, ymax)
         prox = read_prox(node)
         state_log.append(current_pose)
 
@@ -78,7 +121,7 @@ async def main():
 
         # Processing takes ~100 ms. dt is slightly higher -> wait for the remainder
         sleep_time = constants.general['dt'] - (time()-t)
-        print(sleep_time)
+        #print(sleep_time)
         if sleep_time > 0:
             await client.sleep(sleep_time)
 
@@ -101,34 +144,21 @@ async def init_tdm():
     node.add_variables_changed_listener(variables_changed)
     print("Initialized")
 
-def init_global_path():
-    cv_data = [
-        [260.0, 200.0],
-        np.array([[60, 40], [90, 40], [90, 80], [60, 80]]),
-        np.array([[130, 40], [200, 40], [200, 70], [130, 70]]),
-        np.array([[120, 120], [160, 120], [160, 170], [120, 170]]),
-        np.array([[40, 130], [70, 140], [65, 160], [35, 170], [25, 150]]),
-        np.array([[200, 110], [230, 120], [220, 145]]),
-        np.array([[180, 10], [230, 15], [225, 35], [175, 30]]),
-        np.array([20, 20]),
-        np.array([240, 180]),
-    ]
-    for d in cv_data:
-        for i in range(len(d)):
-            d[i] *= 10
-
+def init_global_path(cv_data, ymax):
     planner = GlobalPlanner(cv_data, radius=constants.planning['radius'], spacing=constants.planning['spacing'])
+    plotter = Plotter(planner)
 
     segments = planner.plan()
+    plotter.path()
     for i in range(len(segments)):
-        segments[i] = cv_coords_to_robot(*segments[i])
+        segments[i] = cv_coords_to_robot(*segments[i], ymax)
     return segments
 
-def cv_coords_to_robot(x, y, th=None):
+def cv_coords_to_robot(x, y, ymax, th=None):
     if th is None: 
-        return y, x
+        return x, ymax-y
     else:
-        return y, x, np.pi/2 - th
+        return x, ymax-y, np.pi/2 - th
 
 # Helper function for setting motor values
 # takes LINEAR SPEEDS in mm/s as input
@@ -147,7 +177,7 @@ async def set_motors(left_vel, right_vel):
     elif right_in < -500:
         right_in = -500
 
-    print(left_in, right_in)
+    #print(left_in, right_in)
 
     await node.set_variables({
         "motor.left.target": [left_in],
@@ -167,7 +197,7 @@ def variables_changed(node, variables):
 
 # Use the EKF to update the current estimated pose
 # TODO replace measurements with CV measurements
-def get_current_pose(ekf: EKF):
+def get_current_pose(ekf: EKF, vision, ymax):
     global node
     vl = node['motor.left.speed']
     vr = node['motor.right.speed']
@@ -179,11 +209,21 @@ def get_current_pose(ekf: EKF):
     v = (vl+vr)/constants.robot['wheel_base']
     w = (vr-vl)/constants.robot['wheel_base']
 
+    vision.update_vision(True, False, False)
+    vision.get_tag_pose(4)
+    x = vision.thymio_pose['pose_mm'].flatten()[0]
+    y = vision.thymio_pose['pose_mm'].flatten()[1]
+    theta = vision.thymio_pose['theta']
+    x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
+    print(f'[get_cur_pose] x={x} y={y} theta={theta}')
+
+
+
     measurements = [
-        ekf.state[0],
-        ekf.state[1],
+        x,
+        y,
         v,
-        ekf.state[3],
+        theta,
         w
     ]
 
