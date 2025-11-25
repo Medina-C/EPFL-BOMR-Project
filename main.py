@@ -1,7 +1,7 @@
 import constants as constants
 from constants import * #TODO ugly, change
 from classes.ekf import EKF
-from classes.motion_control import do_astolfi_cl
+from classes.motion_control import do_astolfi_cl, PID
 from classes.local_avoidance import LocalNav, read_prox
 
 from classes.gp import GlobalPlanner, Plotter
@@ -86,6 +86,7 @@ async def main():
         constants.robot['wheel_base'],
         constants.general['dt']
     )
+    pid = PID()
     local_nav = LocalNav()
     state_log = [start_pose]
 
@@ -100,6 +101,7 @@ async def main():
         # Conditions
         if reached_goal(current_pose, goal_pose):
             g += 1
+            pid.reset_integrals()
             if g < len(goals):
                 goal_pose = goals[g]
             else:
@@ -111,7 +113,7 @@ async def main():
 
         # Act based on states
         if state == 'global_nav':
-            await global_nav(current_pose, goal_pose, t)
+            await global_nav(current_pose, goal_pose, pid)
         elif state == 'local_nav':
             cleared = await local_nav.follow_edge(node, prox)
             if cleared:
@@ -250,8 +252,9 @@ def obstacle_detected(prox):
         
     return front >= FRONT_THRESHOLD or front_left >= FRONT_THRESHOLD or front_right >= FRONT_THRESHOLD
 
-async def global_nav(start_pose, goal_pose, t):
+async def global_nav(start_pose, goal_pose, pid: PID):
     vl, vr = do_astolfi_cl(start_pose, goal_pose)
+    #vl, vr = pid.get_mtr_vels(start_pose, goal_pose)
     tt = time()
     await set_motors(vl, vr)
     print(f'time for set mot={time()-tt}')

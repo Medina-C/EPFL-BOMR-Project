@@ -28,6 +28,19 @@ astolfi = {
     'kb': -4,
 }
 
+pid = {
+    'theta': {  
+        'kp': 100,
+        'ki': 1,
+        'kd': 10, 
+    },
+    'beta': {
+        'kp': 100,
+        'ki': 0,
+        'kd': 10,
+    }
+}
+
 planning = {
     'radius': 100,
     'spacing': 300,

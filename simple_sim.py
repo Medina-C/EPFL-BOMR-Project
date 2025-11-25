@@ -16,7 +16,8 @@ goals = [
     (0, 200, np.pi/2),
     (0, 400, np.pi/2),
     (150, 550, np.pi/4),
-    (300, 700, 0)
+    (300, 700, np.pi/4),
+    (500, 700, 0)
 ]
 
 # EKF initialization
@@ -51,13 +52,16 @@ est_state = start_pose
 
 error_log = []
 
+pid = PID()
+
 for goal in goals:
     #u_set, waypts = do_astolfi_ol(est_state, goal)
     n = 0
-    while not reached_goal(est_state, goal) and n < 500:
+    while not reached_goal(est_state, goal) and n < 100:
         n += 1
-        u = do_astolfi_cl(est_state, goal)
+        u = pid.get_mtr_vels(est_state, goal)
         log_u.append(u)
+        print(u)
  
         z = [var + random.gauss(0, constants.ekf['measure_std']) for var in log_real[-1]] # Generate measurement with noise
         est_state = ekf.generate_next_state(u, z)   # Use EKF to estimate next state
