@@ -44,6 +44,7 @@ async def main():
     # ]
 
     vision.get_tag_pose(4)
+    vision.get_tag_pose(5)
     cv_data = []
     if vision.obstacles is not None:
         #print(f'obstacles={vision.obstacles}')
@@ -57,7 +58,7 @@ async def main():
         #print(f'pose={vision.target_pose}')
         cv_data.append(vision.target_pose['pose_mm'].flatten())
         #print(f'data+thy+tar= {cv_data}')
-    cv_data.append(np.array([100, 100]))
+    #cv_data.append(np.array([100, 100]))
     print(f'final data={cv_data}')
 
     x = vision.thymio_pose['pose_mm'].flatten()[0]
@@ -65,10 +66,9 @@ async def main():
     theta = vision.thymio_pose['theta']
 
     ymax = cv_data[0][1]
-    print(f'ymax={ymax}')
-
+    print(f'init before transfo x={x}, y={y}, theta={theta}')
     x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
-    print(f'init x={x}, y={y}, theta={theta}')
+    print(f'init after transfo x={x}, y={y}, theta={theta}')
     start_pose = (x, y, 0, theta, 0)
     
 
@@ -151,14 +151,14 @@ def init_global_path(cv_data, ymax):
     segments = planner.plan()
     plotter.path()
     for i in range(len(segments)):
-        segments[i] = cv_coords_to_robot(*segments[i], ymax)
+        segments[i] = cv_coords_to_robot(segments[i][0], segments[i][1], ymax, segments[i][2])
     return segments
 
 def cv_coords_to_robot(x, y, ymax, th=None):
     if th is None: 
         return x, ymax-y
     else:
-        return x, ymax-y, np.pi/2 - th
+        return x, ymax-y, -th
 
 # Helper function for setting motor values
 # takes LINEAR SPEEDS in mm/s as input
@@ -208,9 +208,12 @@ def get_current_pose(ekf: EKF, vision, ymax):
 
     v = (vl+vr)/constants.robot['wheel_base']
     w = (vr-vl)/constants.robot['wheel_base']
-
-    vision.update_vision(True, False, False)
+    tt = time()
+    vision.update_vision(False, False, False)
+    print(f'time for vision upd={time() - tt}')
+    tt = time()
     vision.get_tag_pose(4)
+    print(f'time for tag pose={time() - tt}')
     x = vision.thymio_pose['pose_mm'].flatten()[0]
     y = vision.thymio_pose['pose_mm'].flatten()[1]
     theta = vision.thymio_pose['theta']
@@ -249,8 +252,9 @@ def obstacle_detected(prox):
 
 async def global_nav(start_pose, goal_pose, t):
     vl, vr = do_astolfi_cl(start_pose, goal_pose)
-
+    tt = time()
     await set_motors(vl, vr)
+    print(f'time for set mot={time()-tt}')
 
 if __name__ == "__main__":
     print("Hello, World!")

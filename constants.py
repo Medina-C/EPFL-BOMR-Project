@@ -2,7 +2,7 @@
    so main.py isn't as cluttered'''
 
 general = {
-    'dt': 0.12,
+    'dt': 0.22,
     'goal_buffer': 50,
     'drive_vel': 130,
     'max_vel': 130,
@@ -18,7 +18,7 @@ robot = {
 }
 
 ekf = {
-    'move_std': 5,
+    'move_std': 10,
     'measure_std': 1,
 }
 
@@ -29,8 +29,8 @@ astolfi = {
 }
 
 planning = {
-    'radius': 60,
-    'spacing': 50,
+    'radius': 100,
+    'spacing': 300,
 }
 
 tag_ids = {

@@ -92,8 +92,8 @@ class Vision:
         # Output (flattened) map size (units: mm but used as px coords for warp)
         """ w = 4*A4_W
         h = 3*A4_H """
-        w = 708
-        h = 506
+        w = 1260
+        h = 890
         dst_points = np.array([
             [0, 0],
             [0, h],
@@ -104,7 +104,7 @@ class Vision:
         self.H, _ = cv.findHomography(src_points, dst_points)
         # scale: mm per "pixel" in the flat output (since dst points are in mm units)
         #self.scale = IRL_MAP_DIST_W / w   # mm per dst-unit
-        self.scale = 708 / w
+        self.scale = 1260 / w
         return True
         
     def compute_flat_pic(self):
@@ -114,8 +114,8 @@ class Vision:
 
         """ w = 4*A4_W
         h = 3*A4_H """
-        w = 708
-        h = 506
+        w = 1260
+        h = 890
         self.frame_flat = cv.warpPerspective(self.frame_undist, self.H, (w, h))
         return True
 
@@ -152,7 +152,7 @@ class Vision:
                 tag_undist_px = None
 
         # 2D orientation in undistorted image (from corners)
-        v = target_corners[1] - target_corners[0]   #<--------------- if angle not correct, use pts_undist.reshape(4,2)[1] - pts_undist.reshape(4,2)[0]
+        v = target_corners[0] - target_corners[3]   #<--------------- if angle not correct, use pts_undist.reshape(4,2)[1] - pts_undist.reshape(4,2)[0]
         theta =  math.atan2(v[1], v[0]) #* (180/math.pi)
         if id == 4:     #replace with use of constants file
             self.thymio_pose = {'pose_mm': target_center_mm,
