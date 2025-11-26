@@ -40,19 +40,34 @@ class VisibilityGraph:
     def _visible(self, a: Point, b: Point) -> bool:
         seg = LineString([a, b])
         for poly in self.polys:
+            # Block segments strictly inside the polygon or crossing it
             if seg.within(poly) or seg.crosses(poly):
                 return False
+
             inter = seg.intersection(poly.boundary)
             if inter.is_empty:
                 continue
+
+            # Single vertex intersection
             if inter.geom_type == "Point":
                 p = inter.coords[0]
                 if not (same(p, a) or same(p, b)):
                     return False
+
+            # Multiple vertex intersections
             elif inter.geom_type == "MultiPoint":
-                for p in inter.coords:
-                    if not (same(p, a) or same(p, b)):
+                for p in inter.geoms:
+                    c = p.coords[0]
+                    if not (same(c, a) or same(c, b)):
                         return False
+
+            # Overlap with boundary (LineString / MultiLineString) – allowed
+            elif inter.geom_type in ("LineString", "MultiLineString"):
+                # Segment runs along the inflated obstacle boundary: this is ok.
+                continue
+
             else:
+                # Any other weird intersection – be conservative and block
                 return False
+
         return True

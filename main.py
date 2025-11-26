@@ -16,6 +16,7 @@ import cv2 as cv
 
 
 state = 'global_nav'
+a_log = []
 
 # Main program
 async def main():
@@ -44,7 +45,7 @@ async def main():
     # ]
 
     vision.get_tag_pose(4)
-    vision.get_tag_pose(5)
+    # vision.get_tag_pose(5)
     cv_data = []
     if vision.obstacles is not None:
         #print(f'obstacles={vision.obstacles}')
@@ -55,10 +56,11 @@ async def main():
         cv_data.append(vision.thymio_pose['pose_mm'].flatten())
 
     if vision.target_pose is not None:
+        pass
         #print(f'pose={vision.target_pose}')
-        cv_data.append(vision.target_pose['pose_mm'].flatten())
+        # cv_data.append(vision.target_pose['pose_mm'].flatten())
         #print(f'data+thy+tar= {cv_data}')
-    #cv_data.append(np.array([100, 100]))
+    cv_data.append(np.array([1100, 800]))
     print(f'final data={cv_data}')
 
     x = vision.thymio_pose['pose_mm'].flatten()[0]
@@ -79,8 +81,8 @@ async def main():
 
     # class initialization
     ekf = EKF(
-        (constants.ekf['move_std']**2)*np.eye(len(start_pose)), 
-        (constants.ekf['measure_std']**2)*np.eye(len(start_pose)),
+        np.diag(constants.ekf['move_vars']), 
+        np.diag(constants.ekf['measure_vars']),
         'complex',
         start_pose,
         constants.robot['wheel_base'],
@@ -97,6 +99,7 @@ async def main():
         current_pose = get_current_pose(ekf, vision, ymax)
         prox = read_prox(node)
         state_log.append(current_pose)
+        cv.imshow("frame", vision.frame_disp)
 
         # Conditions
         if reached_goal(current_pose, goal_pose):
@@ -133,7 +136,13 @@ async def main():
     plt.plot([state[0] for state in state_log], [state[1] for state in state_log])
     plt.axis('equal')
     plt.figure()
+    plt.plot(theta_cv_log)
     plt.plot([state[3] for state in state_log])
+    plt.legend(['theta cv', 'theta state'])
+    plt.title("theta cv log")
+    # plt.figure()
+    # plt.plot(a_log)
+    # plt.title("a log")
     plt.show()
 
 # Setup tdm client
@@ -169,6 +178,7 @@ async def set_motors(left_vel, right_vel):
 
     left_in = int(left_vel * constants.robot['linear_to_mtr_val'])
     right_in = int(right_vel * constants.robot['linear_to_mtr_val'])
+    # print(left_in, right_in)
 
     if left_in > 500:
         left_in = 500
@@ -196,17 +206,20 @@ def variables_changed(node, variables):
             print("stop!")
     except KeyError:
         pass
+    
+theta_cv_log = []
 
 # Use the EKF to update the current estimated pose
 # TODO replace measurements with CV measurements
 def get_current_pose(ekf: EKF, vision, ymax):
-    global node
+    global node, theta_cv_log
     vl = node['motor.left.speed']
     vr = node['motor.right.speed']
     inputs = np.array([
         vl * constants.robot['mtr_val_to_linear'], 
         vr * constants.robot['mtr_val_to_linear']
     ])
+    
 
     v = (vl+vr)/constants.robot['wheel_base']
     w = (vr-vl)/constants.robot['wheel_base']
@@ -222,7 +235,7 @@ def get_current_pose(ekf: EKF, vision, ymax):
     x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
     #print(f'[get_cur_pose] x={x} y={y} theta={theta}')
 
-
+    theta_cv_log.append(theta)
 
     measurements = [
         x,
@@ -253,8 +266,10 @@ def obstacle_detected(prox):
     return front >= FRONT_THRESHOLD or front_left >= FRONT_THRESHOLD or front_right >= FRONT_THRESHOLD
 
 async def global_nav(start_pose, goal_pose, pid: PID):
-    vl, vr = do_astolfi_cl(start_pose, goal_pose)
-    #vl, vr = pid.get_mtr_vels(start_pose, goal_pose)
+    global a_log
+    #vl, vr, a = do_astolfi_cl(start_pose, goal_pose)
+    #a_log.append(a)
+    vl, vr = pid.get_mtr_vels(start_pose, goal_pose)
     tt = time()
     await set_motors(vl, vr)
     #print(f'time for set mot={time()-tt}')

@@ -18,24 +18,24 @@ robot = {
 }
 
 ekf = {
-    'move_std': 10,
-    'measure_std': 1,
+    'move_vars': [1, 1, 0.5, 2, 2],
+    'measure_vars': [1, 1, 2, 1, 2],
 }
 
 astolfi = {
     'kp': 4,
-    'ka': 15,
+    'ka': 80,
     'kb': -2,
 }
 
 pid = {
     'theta': {  
-        'kp': 10,
+        'kp': 2,
         'ki': 0,
         'kd': 0, 
     },
     'beta': {
-        'kp': 5,
+        'kp': 80,
         'ki': 0,
         'kd': 0,
     }
@@ -43,7 +43,7 @@ pid = {
 
 planning = {
     'radius': 100,
-    'spacing': 300,
+    'spacing': 10000,
 }
 
 tag_ids = {

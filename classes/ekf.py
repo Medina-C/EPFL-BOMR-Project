@@ -18,11 +18,11 @@ class EKF:
         # Belief step
         state_bel = self.motion(self.state, inputs)
         
-        G = self.motion_jac(self.state, inputs)
+        G = self.motion_jac(state_bel, inputs)
         P_bel = G @ self.P @ G.T + self.Q
 
         # Update step
-        H = self.measure_jac(self.state)
+        H = self.measure_jac(state_bel)
         K = P_bel @ H.T @ np.linalg.inv(H @ P_bel @ H.T + self.R)
         self.state = state_bel + K @ (measures - self.measure(self.state))
         self.P = (np.eye(np.size(K, 0)) - K @ H) @ P_bel
@@ -87,11 +87,11 @@ class EKF:
         dt, T = self.dt, self.T
 
         return np.array([
-            [1,     0,      -v0*sin(th0)*dt,    cos(th0)*dt,    0],
-            [0,     1,      v0*cos(th0)*dt,     sin(th0)*dt,    0],
-            [0,     0,      1,                  0,              dt],
-            [0,     0,      0,                  0,              0],
-            [0,     0,      0,                  0,              0]
+            [1,     0,      cos(th0)*dt,        -v0*sin(th0)*dt,         0],
+            [0,     1,      sin(th0)*dt,        v0*cos(th0)*dt,          0],
+            [0,     0,      0,                  0,                       0],
+            [0,     0,      0,                  1,                       dt],
+            [0,     0,      0,                  0,                       0]
         ])
         
     def measure_complex(self, x):

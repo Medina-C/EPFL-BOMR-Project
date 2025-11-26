@@ -49,7 +49,7 @@ class PID:
 
         self.prev_theta_error = theta_error
         self.prev_beta_error = beta_error
-        
+        print(vl, vr)
         return vl, vr
     
     def reset_integrals(self):
@@ -59,7 +59,7 @@ class PID:
 def do_astolfi_cl(state, goal):
     # Extract parameters from state
     p, a, b = calc_params([state[0], state[1], state[3]], goal)
-    print(p, a, b)
+
     prev_v, prev_w = state[2], state[4]
     prev_vl = prev_v - robot['wheel_base']/2*prev_w
     prev_vr = prev_v + robot['wheel_base']/2*prev_w
@@ -93,7 +93,7 @@ def do_astolfi_cl(state, goal):
         v = (vl+vr)/robot['wheel_base']
         w = (vr-vl)/robot['wheel_base']
 
-    return vl, vr
+    return vl, vr, a
 
 def wrap_pi(angle):
     return (angle + np.pi) % (2*np.pi) - np.pi
