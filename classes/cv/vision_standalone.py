@@ -20,7 +20,7 @@ class Vision:
         self.aruco_dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_6X6_50)
         params = cv.aruco.DetectorParameters()
         self.detector = cv.aruco.ArucoDetector(self.aruco_dict, params)
-        self.camera_calib = np.load('classes\\cv\\vision_auxiliary\\camera_calib_param.npz')
+        self.camera_calib = np.load('classes/cv/vision_auxiliary/camera_calib_param.npz')
         self.frame_raw = None
         self.frame_undist = None
         self.frame_flat = None
@@ -34,7 +34,7 @@ class Vision:
         self.target_pose = None
 
     def start_video_capture(self, cam_index):
-        cap = cv.VideoCapture(0, cv.CAP_DSHOW)
+        cap = cv.VideoCapture(0)
         cap.set(cv.CAP_PROP_FRAME_WIDTH, 1920)
         cap.set(cv.CAP_PROP_FRAME_HEIGHT, 1080)
         return cap
@@ -163,6 +163,50 @@ class Vision:
                                 'pose_undist_px': tag_undist_px,
                                 'theta': theta}
     
+
+    def get_tag_velocity(self, id):
+        self.get_tag_pose(id)
+        pose_map = {4: self.thymio_pose, 5: self.target_pose}
+        pose = pose_map.get(id)
+        
+        if pose is None or pose.get("pose_mm") is None:
+            return None
+        
+        now = time.time()
+        pos = np.array(pose["pose_mm"], dtype=float).reshape(-1)
+        theta = float(pose["theta"])  # direct accessor, always exists if pose
+        
+        if not hasattr(self, "_last_tag_state"):
+            self._last_tag_state = {}
+        
+        prev = self._last_tag_state(id)
+        
+        self._last_tag_state[id] = {"t": now, "pos": pos, "theta": theta}
+        
+        if prev is None:
+            return {
+                "v_mm_s": np.array([0.0, 0.0]),
+                "speed_mm_s": 0.0,
+                "omega_rad_s": 0.0,
+                "dt": None,
+            }
+        dt = now - prev["t"]
+        if dt <= 0:
+            return {
+                "v_mm_s": np.array([0.0, 0.0]),
+                "speed_mm_s": 0.0,
+                "omega_rad_s": 0.0,
+                "dt": dt,
+            }
+        dpos = (pos - prev["pos"]) / dt
+        dth = (theta - prev["theta"]) / dt
+        
+        return {
+            "v_mms_s": dpos,
+            "speed_mm_s": float(np.linalg.norm(dpos)),
+            "omega_rad_s": dth,
+            "dt": dt
+        }
 
     def find_obstacle_vertices(self, img):
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
@@ -325,19 +369,22 @@ class Vision:
 
 
 if __name__ == "__main__":
-    vision = Vision(1)
+    vision = Vision(0)
     print('[VISION] press SPACE to update. press ESC to quit')
     
     while True:
-        frame = vision.update_vision(True, False, False)
-        if frame is not None:
-            cv.imshow("feed", frame)
+        t = time.time()
+        vision.update_vision(True, False, False)
+        print(f"time false={time.time()-t}")
+        cv.imshow("feed", vision.frame_disp)
         key = cv.waitKey(1)
         if key == 27:   #ESC
             break
 
         if key == 32:   #SPACE
+            t = time.time()
             frame = vision.update_vision(True, True, True)
+            print(f"time true={time.time()-t}")
     vision.stop_video_capture()
 
 #pixel coordinate axis:

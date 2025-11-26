@@ -261,8 +261,8 @@ class Vision:
         ]
         return data
     
-    def update_disp_frame(self, ):
-        if self.
+    # def update_disp_frame(self, ):
+    #     if self.
 
 if __name__ == "__main__":
     vision = Vision(1)

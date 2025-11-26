@@ -23,7 +23,7 @@ async def main():
     await init_tdm()
     
     # TODO CV and path initialization stuff
-    vision = Vision(1)
+    vision = Vision(0)
      
 
     while True:
@@ -212,15 +212,15 @@ def get_current_pose(ekf: EKF, vision, ymax):
     w = (vr-vl)/constants.robot['wheel_base']
     tt = time()
     vision.update_vision(False, False, False)
-    print(f'time for vision upd={time() - tt}')
+    #print(f'time for vision upd={time() - tt}')
     tt = time()
     vision.get_tag_pose(4)
-    print(f'time for tag pose={time() - tt}')
+    #print(f'time for tag pose={time() - tt}')
     x = vision.thymio_pose['pose_mm'].flatten()[0]
     y = vision.thymio_pose['pose_mm'].flatten()[1]
     theta = vision.thymio_pose['theta']
     x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
-    print(f'[get_cur_pose] x={x} y={y} theta={theta}')
+    #print(f'[get_cur_pose] x={x} y={y} theta={theta}')
 
 
 
@@ -257,7 +257,7 @@ async def global_nav(start_pose, goal_pose, pid: PID):
     #vl, vr = pid.get_mtr_vels(start_pose, goal_pose)
     tt = time()
     await set_motors(vl, vr)
-    print(f'time for set mot={time()-tt}')
+    #print(f'time for set mot={time()-tt}')
 
 if __name__ == "__main__":
     print("Hello, World!")

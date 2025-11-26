@@ -14,11 +14,15 @@ class PID:
 
         # Manage errors
         theta_error = th0 - th1
+        if theta_error > np.pi:
+            theta_error = theta_error - 2*np.pi
         self.sum_theta_error += theta_error
         theta_error_diff = (theta_error - self.prev_theta_error)/general['dt']
 
         angle_to_goal = np.atan2(y1-y0, x1-x0)
         beta_error = th0 - angle_to_goal
+        if beta_error > np.pi:
+            beta_error = beta_error - 2*np.pi
         self.sum_beta_error += beta_error
         beta_error_diff = (beta_error - self.prev_beta_error)/general['dt']
 
@@ -55,13 +59,14 @@ class PID:
 def do_astolfi_cl(state, goal):
     # Extract parameters from state
     p, a, b = calc_params([state[0], state[1], state[3]], goal)
+    print(p, a, b)
     prev_v, prev_w = state[2], state[4]
     prev_vl = prev_v - robot['wheel_base']/2*prev_w
     prev_vr = prev_v + robot['wheel_base']/2*prev_w
 
     # Convert from p, a, b to next velocities
     v = general['drive_vel']
-    w_prelim = astolfi['theta']['ka']*a + astolfi['theta']['kb']*b
+    w_prelim = astolfi['ka']*a + astolfi['kb']*b
 
     # Maximum angular velocity based on max wheel speeds
     w = np.sign(w_prelim) * min(
@@ -90,6 +95,9 @@ def do_astolfi_cl(state, goal):
 
     return vl, vr
 
+def wrap_pi(angle):
+    return (angle + np.pi) % (2*np.pi) - np.pi
+
 def calc_params(start, goal):
     x0, y0, th0 = start
     x1, y1, th1 = goal
@@ -99,7 +107,13 @@ def calc_params(start, goal):
 
     # Initial p, a, b
     p = np.sqrt(dx**2 + dy**2)
-    a = -th0 + np.arctan2(dy, dx)
+    a = wrap_pi(-th0 + np.arctan2(dy, dx))
+    
+    # if a >= np.pi:
+    #     a -= 2*np.pi
+    # elif a <= -np.pi:
+    #     a += 2*np.pi
+    
     b = (th1 - th0) - a
 
     return p, a, b
