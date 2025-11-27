@@ -18,8 +18,11 @@ class GlobalPlanner:
     ) -> None:
         self.width, self.height = data[0]
         self.obstacles = [np.asarray(p, float) for p in data[1:-2]]
-        self.start = tuple(np.asarray(data[-2], float))
-        self.goal = tuple(np.asarray(data[-1], float))
+
+        # Clamp start/goal to map bounds
+        self.start = self._clamp_point(tuple(np.asarray(data[-2], float)))
+        self.goal = self._clamp_point(tuple(np.asarray(data[-1], float)))
+
         self.r = radius
         self.spacing = spacing
 
@@ -30,9 +33,16 @@ class GlobalPlanner:
         self.path = None
         self.segments = None
 
+    def _clamp_point(self, p: Point) -> Point:
+        x, y = p
+        x = min(max(float(x), 0.0), float(self.width))
+        y = min(max(float(y), 0.0), float(self.height))
+        return (x, y)
+
     def plan(self, start: Point = None) -> list:
         if start is not None:
-            self.start = tuple(start)
+            # Also clamp dynamic start to map
+            self.start = self._clamp_point(tuple(start))
 
         self.G = self.vg.with_terminals(self.start, self.goal)
 
@@ -77,6 +87,11 @@ class GlobalPlanner:
             if self.r > 0:
                 poly = poly.buffer(self.r, join_style=2)
             polys.append(poly)
+
+            # Clamp all polygon vertices to map bounds before using them
             for x, y in list(poly.exterior.coords)[:-1]:
-                verts.append((float(x), float(y)))
+                x = min(max(float(x), 0.0), float(self.width))
+                y = min(max(float(y), 0.0), float(self.height))
+                verts.append((x, y))
+
         return polys, verts

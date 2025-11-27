@@ -24,7 +24,7 @@ async def main():
     await init_tdm()
     
     # TODO CV and path initialization stuff
-    vision = Vision(1)
+    vision = Vision(0)
      
 
     while True:
@@ -56,10 +56,11 @@ async def main():
         cv_data.append(vision.thymio_pose['pose_mm'].flatten())
 
     if vision.target_pose is not None:
+        pass
         #print(f'pose={vision.target_pose}')
-        cv_data.append(vision.target_pose['pose_mm'].flatten())
+        # cv_data.append(vision.target_pose['pose_mm'].flatten())
         #print(f'data+thy+tar= {cv_data}')
-    #cv_data.append(np.array([1100, 800]))
+    cv_data.append(np.array([1100, 800]))
     print(f'final data={cv_data}')
 
     x = vision.thymio_pose['pose_mm'].flatten()[0]
