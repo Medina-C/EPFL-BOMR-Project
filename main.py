@@ -24,7 +24,7 @@ async def main():
     await init_tdm()
     
     # TODO CV and path initialization stuff
-    vision = Vision(0)
+    vision = Vision(1)
      
 
     while True:
@@ -45,7 +45,7 @@ async def main():
     # ]
 
     vision.get_tag_pose(4)
-    # vision.get_tag_pose(5)
+    vision.get_tag_pose(5)
     cv_data = []
     if vision.obstacles is not None:
         #print(f'obstacles={vision.obstacles}')
@@ -56,11 +56,10 @@ async def main():
         cv_data.append(vision.thymio_pose['pose_mm'].flatten())
 
     if vision.target_pose is not None:
-        pass
         #print(f'pose={vision.target_pose}')
-        # cv_data.append(vision.target_pose['pose_mm'].flatten())
+        cv_data.append(vision.target_pose['pose_mm'].flatten())
         #print(f'data+thy+tar= {cv_data}')
-    cv_data.append(np.array([1100, 800]))
+    #cv_data.append(np.array([1100, 800]))
     print(f'final data={cv_data}')
 
     x = vision.thymio_pose['pose_mm'].flatten()[0]
@@ -132,6 +131,8 @@ async def main():
 
     # Stop
     await set_motors(0, 0)
+
+    vision.stop_video_capture()
 
     plt.plot([state[0] for state in state_log], [state[1] for state in state_log])
     plt.axis('equal')
@@ -228,6 +229,7 @@ def get_current_pose(ekf: EKF, vision, ymax):
     #print(f'time for vision upd={time() - tt}')
     tt = time()
     vision.get_tag_pose(4)
+    
     #print(f'time for tag pose={time() - tt}')
     x = vision.thymio_pose['pose_mm'].flatten()[0]
     y = vision.thymio_pose['pose_mm'].flatten()[1]
@@ -237,12 +239,14 @@ def get_current_pose(ekf: EKF, vision, ymax):
 
     theta_cv_log.append(theta)
 
+    velocity_data = vision.get_tag_velocity(4)
+
     measurements = [
         x,
         y,
-        v,
+        velocity_data['speed_mm_s'],
         theta,
-        w
+        velocity_data['omega_rad_s']
     ]
 
     return ekf.generate_next_state(inputs, measurements)

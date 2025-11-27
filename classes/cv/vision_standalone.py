@@ -34,7 +34,7 @@ class Vision:
         self.target_pose = None
 
     def start_video_capture(self, cam_index):
-        cap = cv.VideoCapture(0)
+        cap = cv.VideoCapture(cam_index, cv.CAP_DSHOW)
         cap.set(cv.CAP_PROP_FRAME_WIDTH, 1920)
         cap.set(cv.CAP_PROP_FRAME_HEIGHT, 1080)
         return cap
@@ -177,9 +177,11 @@ class Vision:
         theta = float(pose["theta"])  # direct accessor, always exists if pose
         
         if not hasattr(self, "_last_tag_state"):
-            self._last_tag_state = {}
+            self._last_tag_state = {
+                4: None
+            }
         
-        prev = self._last_tag_state(id)
+        prev = self._last_tag_state[id]
         
         self._last_tag_state[id] = {"t": now, "pos": pos, "theta": theta}
         
@@ -239,7 +241,7 @@ class Vision:
         obstacle_info_gv.append(np.array([w_c, h_c]))
 
         # obstacle must be at least 85x85 mm
-        min_obstacle_mm = 100
+        min_obstacle_mm = 210
         if self.scale is None or self.scale == 0:
             min_area_px = 0
         else:

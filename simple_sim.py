@@ -22,8 +22,8 @@ goals = [
 
 # EKF initialization
 ekf = EKF(
-    (constants.ekf['move_std']**2)*np.eye(len(start_pose)), 
-    (constants.ekf['measure_std']**2)*np.eye(len(start_pose)),
+    np.diag(constants.ekf['move_vars']), 
+    np.diag(constants.ekf['measure_vars']),
     'complex',
     start_pose,
     constants.robot['wheel_base'],
@@ -63,13 +63,13 @@ for goal in goals:
         log_u.append(u)
         print(u)
  
-        z = [var + random.gauss(0, constants.ekf['measure_std']) for var in log_real[-1]] # Generate measurement with noise
+        z = [var + random.gauss(0, 0.1) for var in log_real[-1]] # Generate measurement with noise
         est_state = ekf.generate_next_state(u, z)   # Use EKF to estimate next state
         log_est.append(est_state)
 
         # Update real position (with noise - motion model is imperfect in real life)
         no_noise_state = ekf.motion(log_real[-1], u)
-        real_state = np.array([var + random.gauss(0, constants.ekf['move_std']) for var in no_noise_state])
+        real_state = np.array([var + random.gauss(0, 0.0001) for var in no_noise_state])
         log_real.append(real_state) 
 
         ideal_state = ekf.motion(log_ideal[-1], u)
@@ -90,8 +90,9 @@ plt.axis('equal')
 
 
 plt.figure()
-plt.plot([u[0] for u in log_u])
-plt.plot([u[1] for u in log_u])
-plt.legend(['Left wheel velocity', 'Right wheel velocity'])
+# plt.plot([u[0] for u in log_u])
+# plt.plot([u[1] for u in log_u])
+# plt.legend(['Left wheel velocity', 'Right wheel velocity'])
+plt.plot([x[3] for x in log_est])
 
 plt.show()

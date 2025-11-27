@@ -24,7 +24,7 @@ class EKF:
         # Update step
         H = self.measure_jac(state_bel)
         K = P_bel @ H.T @ np.linalg.inv(H @ P_bel @ H.T + self.R)
-        self.state = state_bel + K @ (measures - self.measure(self.state))
+        self.state = state_bel + K @ (measures - self.measure(state_bel))
         self.P = (np.eye(np.size(K, 0)) - K @ H) @ P_bel
 
         return self.state
