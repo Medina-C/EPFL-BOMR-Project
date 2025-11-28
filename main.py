@@ -1,9 +1,8 @@
 import constants as constants
-from constants import * #TODO ugly, change
+from constants import *  # TODO ugly, change
 from classes.ekf import EKF
 from classes.motion_control import do_astolfi_cl, PID
 from classes.local_avoidance import LocalNav, read_prox
-
 from classes.gp import GlobalPlanner, Plotter
 from classes.cv import Vision
 
@@ -13,20 +12,41 @@ import os
 from tdmclient import ClientAsync
 from time import time
 import cv2 as cv
+from enum import Enum
 
 
-state = 'global_nav'
+class State(str, Enum):
+    GLOBAL_NAV = "global_nav"
+    LOCAL_NAV = "local_nav"
+    KIDNAPPED = "kidnapped"
+    WAIT = "wait"
+    STOP = "stop"
+
+
+def is_lifted(node):
+    g = node["prox.ground.delta"]
+    return g[0] < 50 and g[1] < 50
+
+
+def is_grounded(node):
+    g = node["prox.ground.delta"]
+    return g[0] > 100 and g[1] > 100
+
+
+state = State.GLOBAL_NAV
 a_log = []
+theta_cv_log = []
+wait_start = None
+
 
 # Main program
 async def main():
-    global node, state
+    global node, state, wait_start
     await init_tdm()
     
     # TODO CV and path initialization stuff
     vision = Vision(0)
-     
-
+    
     while True:
         vision.update_vision(True, False, False)
         if vision.frame_disp is not None:
@@ -36,13 +56,6 @@ async def main():
             break
         if key == ord('h'):
             vision.update_vision(True, True, True) 
-
-    # goals = [
-    #     (0, 300, np.pi/2),
-    #     (0, 600, np.pi/2),
-    #     (300, 600, 0),
-    #     (600, 600, 0),
-    # ]
 
     vision.get_tag_pose(4)
     vision.get_tag_pose(5)
@@ -74,7 +87,7 @@ async def main():
     start_pose = (x, y, 0, theta, 0)
     
 
-    goals = init_global_path(cv_data, ymax)
+    goals, plotter = init_global_path(cv_data, ymax)
     g = 0
     goal_pose = goals[g]
     print(f'goal_pose={goal_pose}')
@@ -92,37 +105,92 @@ async def main():
     local_nav = LocalNav()
     state_log = [start_pose]
 
+    nav_ready = True
+
     # Main loop
-    while state != 'stop':
+    while state != State.STOP:
         #print(state)
         t = time()
-        current_pose = get_current_pose(ekf, vision, ymax)
         prox = read_prox(node)
-        state_log.append(current_pose)
         cv.imshow("frame", vision.frame_disp)
+        cv.waitKey(1)
 
-        # Conditions
-        if reached_goal(current_pose, goal_pose):
-            g += 1
-            pid.reset_integrals()
-            if g < len(goals):
+        if is_lifted(node):
+            state = State.KIDNAPPED
+            nav_ready = False
+        elif state == State.KIDNAPPED and is_grounded(node):
+            state = State.WAIT
+            wait_start = time()
+
+        if state == State.KIDNAPPED:
+            await set_motors(0, 0)
+        elif state == State.WAIT:
+            await set_motors(0, 0)
+            if wait_start is not None and time() - wait_start > 5.0:
+                vision.update_vision(False, True, False)
+                vision.get_tag_pose(4)
+                x = vision.thymio_pose['pose_mm'].flatten()[0]
+                y = vision.thymio_pose['pose_mm'].flatten()[1]
+                theta = vision.thymio_pose['theta']
+                x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
+                start_pose = (x, y, 0, theta, 0)
+
+                cv_data2 = []
+                if vision.obstacles is not None:
+                    cv_data2 = vision.obstacles.copy()
+                cv_data2.append(vision.thymio_pose['pose_mm'].flatten())
+                cv_data2.append(cv_data[-1])
+
+                goals, plotter = init_global_path(cv_data2, ymax)
+                g = 0
                 goal_pose = goals[g]
-            else:
-                print("Reached goal!")
-                state = 'stop'
-                break
-        elif obstacle_detected(prox):
-            state = 'local_nav'
 
-        # Act based on states
-        if state == 'global_nav':
-            await global_nav(current_pose, goal_pose, pid)
-        elif state == 'local_nav':
-            cleared = await local_nav.follow_edge(node, prox)
-            if cleared:
-                state = 'global_nav'
+                ekf = EKF(
+                    np.diag(constants.ekf['move_vars']), 
+                    np.diag(constants.ekf['measure_vars']),
+                    'complex',
+                    start_pose,
+                    constants.robot['wheel_base'],
+                    constants.general['dt']
+                )
+                pid = PID()
+                local_nav = LocalNav()
+                state_log.append(start_pose)
+                nav_ready = True
+                state = State.GLOBAL_NAV
         else:
-            print(f"Invalid state {state}!")
+            if not nav_ready:
+                sleep_time = constants.general['dt'] - (time()-t)
+                if sleep_time > 0:
+                    await client.sleep(sleep_time)
+                continue
+
+            current_pose = get_current_pose(ekf, vision, ymax)
+            print(current_pose)
+            state_log.append(current_pose)
+
+            # Conditions
+            if reached_goal(current_pose, goal_pose):
+                g += 1
+                pid.reset_integrals()
+                if g < len(goals):
+                    goal_pose = goals[g]
+                else:
+                    print("Reached goal!")
+                    state = State.STOP
+                    break
+            elif obstacle_detected(prox) and state == State.GLOBAL_NAV:
+                state = State.LOCAL_NAV
+
+            # Act based on states
+            if state == State.GLOBAL_NAV:
+                await global_nav(current_pose, goal_pose, pid)
+            elif state == State.LOCAL_NAV:
+                cleared = await local_nav.follow_edge(node, prox)
+                if cleared:
+                    state = State.GLOBAL_NAV
+            else:
+                print(f"Invalid state {state}!")
 
         # Processing takes ~100 ms. dt is slightly higher -> wait for the remainder
         sleep_time = constants.general['dt'] - (time()-t)
@@ -135,9 +203,10 @@ async def main():
 
     vision.stop_video_capture()
 
-    plt.plot([state[0] for state in state_log], [state[1] for state in state_log])
-    plt.axis('equal')
-    plt.figure()
+    plotter.paths(
+        [s[0] for s in state_log],
+        [cv_data[0][1] - s[1] for s in state_log]
+    )
     plt.plot(theta_cv_log)
     plt.plot([state[3] for state in state_log])
     plt.legend(['theta cv', 'theta state'])
@@ -161,11 +230,13 @@ def init_global_path(cv_data, ymax):
     planner = GlobalPlanner(cv_data, radius=constants.planning['radius'], spacing=constants.planning['spacing'])
     plotter = Plotter(planner)
 
-    segments = planner.plan()
+    segments_cv = planner.plan()
     plotter.path()
-    for i in range(len(segments)):
-        segments[i] = cv_coords_to_robot(segments[i][0], segments[i][1], ymax, segments[i][2])
-    return segments
+    segments_robot = [
+        cv_coords_to_robot(p[0], p[1], ymax, p[2])
+        for p in segments_cv
+    ]
+    return segments_robot, plotter
 
 def cv_coords_to_robot(x, y, ymax, th=None):
     if th is None: 
@@ -204,7 +275,7 @@ def variables_changed(node, variables):
     try:
         stop = variables["button.center"]
         if stop:
-            state = 'stop'
+            state = State.STOP
             print("stop!")
     except KeyError:
         pass

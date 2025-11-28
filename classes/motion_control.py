@@ -49,7 +49,7 @@ class PID:
 
         self.prev_theta_error = theta_error
         self.prev_beta_error = beta_error
-        print(vl, vr)
+        # print(vl, vr)
         return vl, vr
     
     def reset_integrals(self):

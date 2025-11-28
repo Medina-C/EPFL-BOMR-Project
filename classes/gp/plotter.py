@@ -28,7 +28,7 @@ class Plotter:
                 alpha=0.9,
                 facecolor="black",
                 edgecolor="black",
-                zorder=3
+                zorder=3,
             )
 
     def _draw_inflated_and_vertices(self, ax):
@@ -40,7 +40,7 @@ class Plotter:
                 alpha=0.25,
                 facecolor="black",
                 edgecolor="none",
-                zorder=2
+                zorder=2,
             )
         if self.planner.verts:
             xs, ys = zip(*self.planner.verts)
@@ -78,7 +78,7 @@ class Plotter:
                     linewidth=0.7,
                     color="tab:red",
                     alpha=0.5,
-                    zorder=3
+                    zorder=3,
                 )
         plt.show()
 
@@ -88,6 +88,7 @@ class Plotter:
         self._draw_obstacles(ax)
         self._draw_inflated_and_vertices(ax)
         self._draw_start_goal(ax)
+
         G = self.planner.G
         if G is not None:
             for u, v in G.edges():
@@ -99,12 +100,51 @@ class Plotter:
                     linewidth=0.5,
                     color="tab:red",
                     alpha=0.5,
-                    zorder=2.5
+                    zorder=2.5,
                 )
+
         segments = self.planner.segments
         if segments:
             xs = [p[0] for p in segments]
             ys = [p[1] for p in segments]
             ax.plot(xs, ys, linewidth=1.4, color="tab:blue", zorder=6)
             ax.scatter(xs, ys, s=5, color="tab:blue", zorder=6)
+
         plt.show()
+
+    def paths(self, xs_exec, ys_exec):
+        """
+        Same plot as path(), but overlays executed trajectory (xs_exec, ys_exec).
+        """
+
+        fig, ax = plt.subplots()
+        self._setup_axes(ax, "Planned vs Executed Path")
+        self._draw_obstacles(ax)
+        self._draw_inflated_and_vertices(ax)
+        self._draw_start_goal(ax)
+
+        G = self.planner.G
+        if G is not None:
+            for u, v in G.edges():
+                xs, ys = zip(u, v)
+                ax.plot(
+                    xs,
+                    ys,
+                    linestyle="--",
+                    linewidth=0.5,
+                    color="tab:red",
+                    alpha=0.5,
+                    zorder=2.5,
+                )
+
+        segments = self.planner.segments
+        if segments:
+            xs = [p[0] for p in segments]
+            ys = [p[1] for p in segments]
+            ax.plot(xs, ys, linewidth=1.4, color="tab:blue", zorder=6)
+            ax.scatter(xs, ys, s=5, color="tab:blue", zorder=6)
+
+        ax.plot(xs_exec, ys_exec, linewidth=1.6, color="tab:orange", zorder=7)
+        # ax.scatter(xs_exec, ys_exec, s=6, color="tab:orange", zorder=8)
+
+        # plt.show()
