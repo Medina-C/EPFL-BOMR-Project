@@ -44,7 +44,6 @@ async def main():
     global node, state, wait_start
     await init_tdm()
     
-    # TODO CV and path initialization stuff
     vision = Vision(0)
     
     while True:

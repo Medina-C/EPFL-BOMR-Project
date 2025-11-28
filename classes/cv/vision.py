@@ -2,6 +2,7 @@ import numpy as np
 import cv2 as cv
 import math
 import time
+#import constants
 
 A4_W = 210  #in mm
 A4_H = 297  #in mm
@@ -11,15 +12,13 @@ DISP_FRAME_W = 960
 DISP_FRAME_H = 540
 
 
-
-
 class Vision:
     def __init__(self, cam_index):
         self.cap = self.start_video_capture(cam_index)
         self.aruco_dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_6X6_50)
         params = cv.aruco.DetectorParameters()
         self.detector = cv.aruco.ArucoDetector(self.aruco_dict, params)
-        self.camera_calib = np.load('classes\\cv\\vision_auxiliary\\camera_calib_param.npz')
+        self.camera_calib = np.load('classes/cv/vision_auxiliary/camera_calib_param.npz')
         self.frame_raw = None
         self.frame_undist = None
         self.frame_flat = None
@@ -29,9 +28,14 @@ class Vision:
         self.scale = None
         self.obstacles = None
         self.frame_disp = None
+        self.thymio_pose = None
+        self.target_pose = None
 
     def start_video_capture(self, cam_index):
-        cap = cv.VideoCapture(cam_index, cv.CAP_DSHOW)
+        cap = cv.VideoCapture(
+            cam_index, 
+            # cv.CAP_DSHOW
+        )
         cap.set(cv.CAP_PROP_FRAME_WIDTH, 1920)
         cap.set(cv.CAP_PROP_FRAME_HEIGHT, 1080)
         return cap
@@ -78,6 +82,7 @@ class Vision:
                 print(f"[ERROR] Corner marker {nid} missing.")
                 return None
 
+        # Use consistent ordering: TL, TR, BR, BL
         src_points = np.array([
             id_to_corner[0][0][0],  # TL
             id_to_corner[1][0][3],  # BL
@@ -85,17 +90,22 @@ class Vision:
             id_to_corner[3][0][2]   # BR
         ], dtype=np.float32)
 
-        # Output (flattened) map size
-        w = 4*A4_W
-        h = 3*A4_H
+        # Output (flattened) map size (units: mm but used as px coords for warp)
+        """ w = 4*A4_W
+        h = 3*A4_H """
+        w = 1260
+        h = 890
         dst_points = np.array([
             [0, 0],
             [0, h],
             [w, 0],
             [w, h]
         ], dtype=np.float32)
+
         self.H, _ = cv.findHomography(src_points, dst_points)
-        self.scale = IRL_MAP_DIST_W / w   #px->mm      TO ADJUST depending on real life map
+        # scale: mm per "pixel" in the flat output (since dst points are in mm units)
+        #self.scale = IRL_MAP_DIST_W / w   # mm per dst-unit
+        self.scale = 1260 / w
         return True
         
     def compute_flat_pic(self):
@@ -103,30 +113,104 @@ class Vision:
             print("[WARN] Cannot flatten picture: H not computed yet.")
             return None
 
-        w = 4*A4_W
-        h = 3*A4_H
+        """ w = 4*A4_W
+        h = 3*A4_H """
+        w = 1260
+        h = 890
         self.frame_flat = cv.warpPerspective(self.frame_undist, self.H, (w, h))
         return True
 
     def get_tag_pose(self, id):
+        if self.ids is None:
+            print(f'[VISION] no tags detected currently')
+            return 
         ids_flat = self.ids.flatten()
         if id in ids_flat:
-            idx = np.where(ids_flat == id)[0][0]     #self.ids not previously sorted so need to get idx
+            idx = np.where(ids_flat == id)[0][0]
             target_corners = self.corners[idx][0]
         else: 
             print(f'[VISION] tag id= {id} not detected')
-            return None, None
+            return
 
-        pts = target_corners.reshape(-1, 1, 2)      #for .perspectiveTransform purposes
+        pts = target_corners.reshape(-1, 1, 2)
+        target_center_px = None
+        target_center_mm = None
+        theta = None
+        # compute flat coordinates if homography exists
         if self.H is not None:
             target_corners_flat = cv.perspectiveTransform(pts, self.H)
-            target_center_px = target_corners_flat.mean(axis=0)
-            target_center_mm = target_center_px * self.scale 
+            target_center_px = target_corners_flat.mean(axis=0)  # in flat units
+            target_center_mm = target_center_px * self.scale     # mm units
 
-            v = target_corners[1] - target_corners[0]
-            theta =  math.atan2(v[1], v[0]) * (180/math.pi)          
-            return target_center_mm, target_center_px, theta
+            # also compute undistorted pixel location for drawing by inverting H
+            try:
+                H_inv = np.linalg.inv(self.H)
+                pts_flat = target_center_px.reshape(-1,1,2).astype(np.float32)
+                pts_undist = cv.perspectiveTransform(pts_flat, H_inv)
+                cx, cy = pts_undist.reshape(-1)
+                tag_undist_px = np.array([int(round(float(cx))), int(round(float(cy)))])
+            except Exception:
+                tag_undist_px = None
+
+        # 2D orientation in undistorted image (from corners)
+        v = target_corners[0] - target_corners[3]   #<--------------- if angle not correct, use pts_undist.reshape(4,2)[1] - pts_undist.reshape(4,2)[0]
+        theta =  math.atan2(v[1], v[0]) #* (180/math.pi)
+        if id == 4:     #replace with use of constants file
+            self.thymio_pose = {'pose_mm': target_center_mm,
+                                'pose_undist_px': tag_undist_px,
+                                'theta': theta}
+        elif id == 5:   #same
+            self.target_pose = {'pose_mm': target_center_mm,
+                                'pose_undist_px': tag_undist_px,
+                                'theta': theta}
     
+
+    def get_tag_velocity(self, id):
+        self.get_tag_pose(id)
+        pose_map = {4: self.thymio_pose, 5: self.target_pose}
+        pose = pose_map.get(id)
+        
+        if pose is None or pose.get("pose_mm") is None:
+            return None
+        
+        now = time.time()
+        pos = np.array(pose["pose_mm"], dtype=float).reshape(-1)
+        theta = float(pose["theta"])  # direct accessor, always exists if pose
+        
+        if not hasattr(self, "_last_tag_state"):
+            self._last_tag_state = {
+                4: None
+            }
+        
+        prev = self._last_tag_state[id]
+        
+        self._last_tag_state[id] = {"t": now, "pos": pos, "theta": theta}
+        
+        if prev is None:
+            return {
+                "v_mm_s": np.array([0.0, 0.0]),
+                "speed_mm_s": 0.0,
+                "omega_rad_s": 0.0,
+                "dt": None,
+            }
+        dt = now - prev["t"]
+        if dt <= 0:
+            return {
+                "v_mm_s": np.array([0.0, 0.0]),
+                "speed_mm_s": 0.0,
+                "omega_rad_s": 0.0,
+                "dt": dt,
+            }
+        dpos = (pos - prev["pos"]) / dt
+        dth = (theta - prev["theta"]) / dt
+        
+        return {
+            "v_mms_s": dpos,
+            "speed_mm_s": float(np.linalg.norm(dpos)),
+            "omega_rad_s": dth,
+            "dt": dt
+        }
+
     def find_obstacle_vertices(self, img):
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         gray = cv.GaussianBlur(gray, (5, 5), 0)
@@ -137,11 +221,11 @@ class Vision:
 
         # Adaptive thresholding for robustness
         threshold = cv.adaptiveThreshold(
-            cropped, 255,      #use cropped instead of gray if using margin removal
+            cropped, 255,
             cv.ADAPTIVE_THRESH_GAUSSIAN_C,
             cv.THRESH_BINARY_INV,
-            51,   # block size (odd)
-            5     # C value
+            51,
+            5
         )
 
         # Morphology to remove small specks
@@ -155,34 +239,31 @@ class Vision:
         obstacles = []
         obstacle_info_gv = []
         h_c, w_c = cropped.shape
-        obstacle_info_gv.append(np.array([w_c, h_c]))   #insert map dimensions as first array
+        obstacle_info_gv.append(np.array([w_c, h_c]))
 
-        # obstacle must be at least 40x40 mm
-        min_obstacle_mm = 85    #to ignore aruco tags
-        min_area_px = (min_obstacle_mm / self.scale) ** 2  # convert mm² → px²
+        # obstacle must be at least 85x85 mm
+        min_obstacle_mm = 100
+        if self.scale is None or self.scale == 0:
+            min_area_px = 0
+        else:
+            min_area_px = (min_obstacle_mm / self.scale) ** 2
 
         for cont in contours:
             area = cv.contourArea(cont)
             if area < min_area_px:
                 continue
 
-            # ------------------------
-            # 4. Polygon approximation
-            # ------------------------
             perimeter = cv.arcLength(cont, True)
-            epsilon = 0.015 * perimeter  # lower = more vertices
+            epsilon = 0.015 * perimeter
             approx = cv.approxPolyDP(cont, epsilon, True)
 
             if not cv.isContourConvex(approx):
                 approx = cv.convexHull(approx)
 
-            # ------------------------
-            # 5. Convert coordinates to full image
-            # ------------------------
             approx_px = approx.reshape(-1, 2)
             approx_px_full = approx_px + np.array([crop_margin, crop_margin])
 
-            approx_mm = approx_px_full * self.scale  # px → mm
+            approx_mm = approx_px_full * self.scale if self.scale is not None else approx_px_full
 
             obstacles.append({
                 "vertices_px": approx_px_full,
@@ -197,13 +278,14 @@ class Vision:
         for obs in obstacles:
             cv.polylines(debug, [obs["vertices_px"].astype(int)], True, (0, 0, 255), 2)
         cv.imwrite("classes/cv/results/debug_obstacles.png", debug)
-
+        return obstacles
 
     def update_vision(self, save_frames, find_flat, find_obstacles):
+        #print('[VISION] running update_vision')
         ret, frame = self.cap.read()
         if not ret:
             print('[VISION] cannot read camera frame')
-            return
+            return None
 
         self.frame_raw = frame
         self.frame_undist = self.remove_distortion(frame)
@@ -235,18 +317,10 @@ class Vision:
             if self.obstacles is not None:
                 print('[VISION] found obstacles')
 
-           
-        """    if draw_tags and self.tags is not None:
-            for tag in self.tags:
-                H_inv = np.linalg.inv(vision.H)
-                pts_flat = vision.target_center_px.reshape(-1,1,2)  # (1,1,2) shape for cv.perspectiveTransform
-                pts_undist = cv.perspectiveTransform(pts_flat, H_inv)
-                cx, cy = pts_undist.flatten()
-                cx, cy = pts_undist.reshape(-1)
-                cx = int(round(float(cx)))
-                cy = int(round(float(cy)))
-                cv.circle(frame, (cx,cy), 20, (0,0,255), -1) """
-  
+        # draw overlays on frame_disp if available
+        self.update_disp_frame()
+
+
     def return_dummy(self):
         data = [
         [260.0, 200.0],
@@ -261,26 +335,57 @@ class Vision:
         ]
         return data
     
-    # def update_disp_frame(self, ):
-    #     if self.
+    def update_disp_frame(self):
+        if self.frame_disp is None:
+            return
+        # draw obstacles (simple visualization)
+        if isinstance(self.obstacles, list):
+            # obstacles stored as arrays in obstacle_info_gv; skip first entry (dims)
+            for item in self.obstacles[1:]:
+                #print('updating frame with obstacle drawing')
+                try:
+                    pts = np.array(item).astype(int)
+                    if pts.ndim == 2 and pts.shape[0] >= 3:
+                        # scale display coords from flat->display rough approximation
+                        # we skip precise reprojection for minimal invasive change
+                        x = (pts[:,0] * DISP_FRAME_W / (4*A4_W)).astype(int)
+                        y = (pts[:,1] * DISP_FRAME_H / (3*A4_H)).astype(int)
+                        pts_disp = np.stack([x, y], axis=1)
+                        cv.polylines(self.frame_disp, [pts_disp], True, (0,255,0), 2)
+                except Exception:
+                    pass
+
+        if self.thymio_pose is not None:
+            cv.circle(self.frame_disp, (self.thymio_pose['pose_undist_px'][0], self.thymio_pose['pose_undist_px'][1]), 8, (0,0,255), -1)
+        if self.target_pose is not None:
+            cv.circle(self.frame_disp, (self.target_pose['pose_undist_px'][0], self.target_pose['pose_undist_px'][1]), 8, (0,0,255), -1)
+            
+
+        """ if self.last_tag_undist_px is not None:
+            cx, cy = int(self.last_tag_undist_px[0]), int(self.last_tag_undist_px[1])
+            # scale to display
+            cx_disp = int(cx * DISP_FRAME_W / self.frame_undist.shape[1])
+            cy_disp = int(cy * DISP_FRAME_H / self.frame_undist.shape[0])
+            cv.circle(self.frame_disp, (cx_disp, cy_disp), 8, (0,0,255), -1) """
+
 
 if __name__ == "__main__":
-    vision = Vision(1)
+    vision = Vision(0)
     print('[VISION] press SPACE to update. press ESC to quit')
     
     while True:
-        frame = vision.update_vision(True, False, False)
-        cv.imshow("feed", frame)
+        t = time.time()
+        vision.update_vision(True, False, False)
+        print(f"time false={time.time()-t}")
+        cv.imshow("feed", vision.frame_disp)
         key = cv.waitKey(1)
         if key == 27:   #ESC
             break
 
         if key == 32:   #SPACE
-            #start = time.perf_counter()
+            t = time.time()
             frame = vision.update_vision(True, True, True)
-            #end = time.perf_counter()
-            #elapsed_ms = (end - start) * 1000
-            #print(f"[TIME] update_vision(true) took {elapsed_ms:.2f} ms")
+            print(f"time true={time.time()-t}")
     vision.stop_video_capture()
 
 #pixel coordinate axis:

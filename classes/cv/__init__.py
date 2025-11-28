@@ -1,3 +1,3 @@
-from .vision_standalone import Vision
+from .vision import Vision
 
 __all__ = ["Vision"]
