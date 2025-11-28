@@ -1,0 +1,6 @@
+numpy==1.27.4
+matplotlib==3.9.0
+networkx==3.3.0
+shapely==2.4.3
+opencv-contrib-python==4.9.0.76
+tdmclient==1.11.0

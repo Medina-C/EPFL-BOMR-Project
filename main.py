@@ -1,7 +1,7 @@
 import constants as constants
 from constants import *  # TODO ugly, change
 from classes.ekf import EKF
-from classes.motion_control import do_astolfi_cl, PID
+from classes.motion_control import PID
 from classes.local_avoidance import LocalNav, read_prox
 from classes.gp import GlobalPlanner, Plotter
 from classes.cv import Vision
