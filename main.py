@@ -14,6 +14,9 @@ from time import time
 import cv2 as cv
 from enum import Enum
 
+LT = constants.kidnapping["lifted_threshold"]
+GT = constants.kidnapping["grounded_threshold"]
+WT = constants.kidnapping["wait_time"]
 
 class State(str, Enum):
     GLOBAL_NAV = "global_nav"
@@ -25,12 +28,12 @@ class State(str, Enum):
 
 def is_lifted(node):
     g = node["prox.ground.delta"]
-    return g[0] < 50 and g[1] < 50
+    return g[0] < LT and g[1] < LT
 
 
 def is_grounded(node):
     g = node["prox.ground.delta"]
-    return g[0] > 100 and g[1] > 100
+    return g[0] > GT and g[1] > GT
 
 
 state = State.GLOBAL_NAV
@@ -68,11 +71,11 @@ async def main():
         cv_data.append(vision.thymio_pose['pose_mm'].flatten())
 
     if vision.target_pose is not None:
-        pass
+        # pass
         #print(f'pose={vision.target_pose}')
-        # cv_data.append(vision.target_pose['pose_mm'].flatten())
+        cv_data.append(vision.target_pose['pose_mm'].flatten())
         #print(f'data+thy+tar= {cv_data}')
-    cv_data.append(np.array([1100, 800]))
+    # cv_data.append(np.array([1100, 800]))
     print(f'final data={cv_data}')
 
     x = vision.thymio_pose['pose_mm'].flatten()[0]
@@ -125,7 +128,7 @@ async def main():
             await set_motors(0, 0)
         elif state == State.WAIT:
             await set_motors(0, 0)
-            if wait_start is not None and time() - wait_start > 5.0:
+            if wait_start is not None and time() - wait_start > WT:
                 vision.update_vision(False, True, False)
                 vision.get_tag_pose(4)
                 x = vision.thymio_pose['pose_mm'].flatten()[0]
@@ -165,7 +168,7 @@ async def main():
                 continue
 
             current_pose = get_current_pose(ekf, vision, ymax)
-            print(current_pose)
+            # print(current_pose)
             state_log.append(current_pose)
 
             # Conditions
@@ -293,8 +296,8 @@ def get_current_pose(ekf: EKF, vision, ymax):
     ])
     
 
-    v = (vl+vr)/constants.robot['wheel_base']
-    w = (vr-vl)/constants.robot['wheel_base']
+    v = (vl + vr) / constants.robot['wheel_base']
+    w = (vr - vl) / constants.robot['wheel_base']
     tt = time()
     vision.update_vision(False, False, False)
     #print(f'time for vision upd={time() - tt}')
@@ -354,7 +357,7 @@ if __name__ == "__main__":
     client = ClientAsync()
     client.run_async_program(main)
     client.close()
-    print("stopped")
+    print("Stopped")
     print(state)
 
     os._exit(0)

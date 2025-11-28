@@ -51,6 +51,12 @@ tag_ids = {
     'target': 5
 }
 
+kidnapping = {
+    "lifted_threshold": 50,
+    "grounded_threshold": 100,
+    "wait_time": 5
+}
+
 IDX_NO = 0
 IDX_NNO = 1
 IDX_FRONT = 2
