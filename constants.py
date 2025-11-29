@@ -13,8 +13,8 @@ general = {
 robot = {
     'wheel_rad': 44/2,
     'wheel_base': 95,
-    'mtr_val_to_linear': 1/2.5,
-    'linear_to_mtr_val': 2.5,
+    'mtr_val_to_linear': 0.3664,
+    'linear_to_mtr_val': 1/0.3664,
 }
 
 ekf = {

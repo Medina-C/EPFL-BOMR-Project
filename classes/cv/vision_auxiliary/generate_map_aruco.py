@@ -15,7 +15,7 @@ tag_size_px = int(tag_size_mm * mm_to_px)
 
 # ArUco dictionary and ID
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_50)
-tag_id = 5
+tag_id = 4
 
 # -------- Create blank A4 page --------
 page = 255 * np.ones((page_h, page_w), dtype=np.uint8)

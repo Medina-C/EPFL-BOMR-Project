@@ -29,7 +29,7 @@ if __name__ == "__main__":
     plotter.path()
 
     new_start = [150.0, 10.0]
-    path2 = planner.plan(new_start)
+    segments2 = planner.plan(new_start)
     plotter.plain()
     plotter.visibility()
     plotter.path()

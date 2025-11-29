@@ -63,18 +63,14 @@ async def main():
     vision.get_tag_pose(5)
     cv_data = []
     if vision.obstacles is not None:
-        #print(f'obstacles={vision.obstacles}')
         cv_data = vision.obstacles.copy()
 
     if vision.thymio_pose is not None:
-        #print(f'pose={vision.thymio_pose}')
         cv_data.append(vision.thymio_pose['pose_mm'].flatten())
 
     if vision.target_pose is not None:
         # pass
-        #print(f'pose={vision.target_pose}')
         cv_data.append(vision.target_pose['pose_mm'].flatten())
-        #print(f'data+thy+tar= {cv_data}')
     # cv_data.append(np.array([1100, 800]))
     print(f'final data={cv_data}')
 
