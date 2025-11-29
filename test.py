@@ -1,10 +1,5 @@
 import constants as constants
 from constants import * #TODO ugly, change
-from classes.ekf import EKF
-from classes.motion_control import do_astolfi_cl, PID
-from classes.local_avoidance import LocalNav, read_prox
-
-from classes.gp import GlobalPlanner, Plotter
 from classes.cv import Vision
 
 import matplotlib.pyplot as plt
@@ -47,19 +42,19 @@ async def test_velocity_to_motor_input():
         # Wait for acceleration
         await client.sleep(1)
         vision.update_vision(False, False, False)
-        sleep(0.01)
         vision.get_tag_pose(4)
-        sleep(0.01)
         start_pose = vision.thymio_pose['pose_mm'].flatten()
         print(start_pose)
 
-        sleep(1000)
+        t = time()
+        while time()-t < delay:
+            vision.update_vision(False, False, False)
+            vision.get_tag_pose(4)
+            pose = vision.thymio_pose['pose_mm'].flatten()
+            print(pose)
+            await client.sleep(0.05)
 
-        print('here')
-        vision.update_vision(False, False, False)
-        sleep(0.01)
-        vision.get_tag_pose(4)
-        sleep(0.01)
+      
         cv.imshow('framee', vision.frame_disp)
         cv.waitKey(1)
         end_pose = vision.thymio_pose['pose_mm'].flatten()
