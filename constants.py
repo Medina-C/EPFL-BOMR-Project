@@ -62,7 +62,7 @@ IDX_NNO = 1
 IDX_FRONT = 2
 IDX_NNE = 3
 IDX_NE = 4
-FRONT_THRESHOLD = 1300   # detect obstacle early (increased for earlier detection of spontaneous obstacles)
+DETECTION_THRESHOLD = 1800   # obstacle detection threshold for all sensors (lower = earlier detection when farther away)
 SIDE_THRESHOLD = 1000
 CLEAR_THRESHOLD = 800
 CHECK_INTERVAL = 0.05    # seconds between loop iterations
