@@ -131,7 +131,7 @@ async def test_motor_l_r():
 
     output.close()
 
-async def test_linear_variances():
+async def test_linear_variances_allcv():
     global node
     await init_tdm()
 
@@ -253,47 +253,92 @@ async def observe_accel():
     plt.legend(["left", "right"])
     plt.show()
     
-async def test_linear_variances_not():
+async def test_linear_variances():
     global node
     await init_tdm()
 
-    N = 500
-    target = 130*constants.robot['linear_to_mtr_val']
-    T = 0.05
+    vision = Vision(1)
+     
+    while True:
+        vision.update_vision(True, False, False)
+        if vision.frame_disp is not None:
+            cv.imshow('frame', vision.frame_disp)
+        key = cv.waitKey(1) & 0xFF
+        if key == 27:  # ESC -> exit
+            break
+        if key == ord('h'):
+            vision.update_vision(True, True, True) 
+    vision.get_tag_pose(4)
 
-    vel_error = []
-    rdata = []
-    ldata = []
+    target_mm = 100
+    target_robot = target_mm*constants.robot['linear_to_mtr_val']
 
     v = {
-        "motor.left.target": [int(target*0.99)],
-        "motor.right.target": [int(target)],
+        "motor.left.target": [int(target_robot*0.99)],
+        "motor.right.target": [int(target_robot)],
     }
     await node.set_variables(v)
     await client.sleep(1)
 
-    for i in range(N):
+    vel_error = []
+    pos_error = []
+    rdata = []
+    ldata = []
+
+    delay = 8
+
+    time_log = [time()]
+    vision.update_vision(False, False, False)
+    vision.get_tag_pose(4)
+
+    start_pose = vision.thymio_pose['pose_mm'].flatten()
+    prev_cv_pos = 0
+
+    output = open('outputs/robot_errors.csv', 'a')
+
+    await client.sleep(0.1)
+
+    while time_log[-1] - time_log[0] < delay:
         right = node['motor.right.speed']
         left = node['motor.left.speed']
+        time_log.append(time())
 
         rdata.append(right)
         ldata.append(left)
 
-        vel = (right + left)/2
-        vel_error.append(target - vel)
-        await client.sleep(T)
+        vel = (right + left)/2*constants.robot['mtr_val_to_linear']
+        vel_error.append(target_mm - vel)
+
+        vision.update_vision(False, False, False)
+        vision.get_tag_pose(4)
+
+
+        dx = start_pose[0] - vision.thymio_pose['pose_mm'].flatten()[0]
+        dy = start_pose[1] - vision.thymio_pose['pose_mm'].flatten()[1]
+
+        pos_cv = np.sqrt(dx**2 + dy**2)
+        pos_robot = prev_cv_pos + vel*(time_log[-1] - time_log[-2])
+        print(pos_cv, pos_robot, vel, time_log[-1] - time_log[-2])
+
+        # Skip first one because something weird is happening with the get_tag_pose() timing
+        if prev_cv_pos != 0:
+            pos_error.append(pos_cv - pos_robot)
+
+            output.write(f'{vel_error[-1]},{pos_error[-1]}\n')
+
+        prev_cv_pos = pos_cv
+
+        await client.sleep(0.1)
+
+    v = {
+        "motor.left.target": [0],
+        "motor.right.target": [0],
+    }
+    await node.set_variables(v)
+    output.close()
 
     print(f'Velocity error variance: {np.var(vel_error)}')
 
-    actual_pos = 0
-    ideal_pos = 0
-    pos_error = []
-    for i in range(len(vel_error)):
-        ideal_pos += T*target
-        actual_pos += T*(rdata[i]+ldata[i])/2
-        pos_error.append([ideal_pos - actual_pos])
-
-    print(pos_error)
     print(f'Positional error variance: {np.var(pos_error)}')
 
     plt.subplot(2, 1, 1)
@@ -305,6 +350,98 @@ async def test_linear_variances_not():
     plt.show()
 
 async def test_angular_variances():
+    global node
+    await init_tdm()
+
+    vision = Vision(1)
+     
+    while True:
+        vision.update_vision(True, False, False)
+        if vision.frame_disp is not None:
+            cv.imshow('frame', vision.frame_disp)
+        key = cv.waitKey(1) & 0xFF
+        if key == 27:  # ESC -> exit
+            break
+        if key == ord('h'):
+            vision.update_vision(True, True, True) 
+    vision.get_tag_pose(4)
+
+    target_l = 160
+    target_r = 90
+    target_w = (target_l - target_r)/constants.robot['wheel_base']
+
+    v = {
+        "motor.left.target": [int(target_l*0.99*constants.robot['linear_to_mtr_val'])],
+        "motor.right.target": [int(target_r*constants.robot['linear_to_mtr_val'])],
+    }
+    await node.set_variables(v)
+    await client.sleep(1)
+
+    w_error = []
+    theta_error = []
+    rdata = []
+    ldata = []
+
+    delay = 30
+
+    time_log = [time()]
+    vision.update_vision(False, False, False)
+    vision.get_tag_pose(4)
+
+    prev_cv_theta = vision.thymio_pose['theta']
+
+    output = open('outputs/robot_errors.csv', 'a')
+
+    await client.sleep(0.1)
+
+    while time_log[-1] - time_log[0] < delay:
+        right = node['motor.right.speed']
+        left = node['motor.left.speed']
+        time_log.append(time())
+
+        rdata.append(right)
+        ldata.append(left)
+
+        w = (left - right)/constants.robot['wheel_base']*constants.robot['mtr_val_to_linear']
+        w_error.append(target_w - w)
+
+        vision.update_vision(False, False, False)
+        vision.get_tag_pose(4)
+
+        theta_cv = vision.thymio_pose['theta']
+
+        theta_robot = prev_cv_theta + w*(time_log[-1] - time_log[-2])
+        print(theta_cv, theta_robot, w, time_log[-1] - time_log[-2])
+
+        # Skip first one because something weird is happening with the get_tag_pose() timing
+        if prev_cv_theta != 0:
+            theta_error.append(theta_cv - theta_robot)
+            output.write(f'{w_error[-1]},{theta_error[-1]}\n')
+
+        prev_cv_theta = theta_cv
+
+        await client.sleep(0.1)
+
+    v = {
+        "motor.left.target": [0],
+        "motor.right.target": [0],
+    }
+    await node.set_variables(v)
+    output.close()
+
+    print(f'Velocity error variance: {np.var(w_error)}')
+
+    print(f'Positional error variance: {np.var(theta_error)}')
+
+    plt.subplot(2, 1, 1)
+    plt.hist(w_error)
+    plt.title("Velocity error")
+    plt.subplot(2, 1, 2)
+    plt.hist(theta_error)
+    plt.title("Positional error")
+    plt.show()
+
+async def test_angular_variances_old():
     global node
     await init_tdm()
 
@@ -403,7 +540,7 @@ async def set_motors(left_vel, right_vel):
 if __name__ == "__main__":
     print("Hello, World!")
     client = ClientAsync()
-    client.run_async_program(test_linear_variances)
+    client.run_async_program(test_angular_variances)
     client.close()
     print("stopped")
 

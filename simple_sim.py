@@ -62,8 +62,9 @@ for goal in goals:
         u = pid.get_mtr_vels(est_state, goal)
         log_u.append(u)
         print(u)
- 
-        z = [var + random.gauss(0, 0.1) for var in log_real[-1]] # Generate measurement with noise
+
+        z_nonoise = [log_real[-1][0], log_real[-1][1], log_real[-1][3]]
+        z = [var + random.gauss(0, 0.1) for var in z_nonoise] # Generate measurement with noise
         est_state = ekf.generate_next_state(u, z)   # Use EKF to estimate next state
         log_est.append(est_state)
 

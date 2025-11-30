@@ -3,7 +3,7 @@
 
 general = {
     'dt': 0.22,
-    'goal_buffer': 30,
+    'goal_buffer': 50,
     'drive_vel': 130,
     'max_vel': 130,
     'max_accel': 20000,
@@ -18,8 +18,8 @@ robot = {
 }
 
 ekf = {
-    'move_vars': [250, 250, 125, 500, 500],
-    'measure_vars': [1, 1, 2, 1, 2],
+    'move_vars': [4.48, 4.48, 10.78, 0.0156, 0.0088],
+    'measure_vars': [0.364, 0.213, 0.00051],
 }
 
 astolfi = {
@@ -36,8 +36,8 @@ pid = {
     },
     'beta': {
         'kp': 80,
-        'ki': 0,
-        'kd': 0,
+        'ki': 1,
+        'kd': 1,
     }
 }
 

@@ -8,7 +8,7 @@ class EKF:
     def __init__(self, motion_var, measure_var, model, state0, robot_wd, dt):
         self.Q = motion_var
         self.R = measure_var
-        self.P = self.R
+        self.P = self.Q
         self.state = np.array(state0)
         self.T = robot_wd
         self.dt = dt
@@ -95,10 +95,14 @@ class EKF:
         ])
         
     def measure_complex(self, x):
-        return x
+        return np.array([x[0], x[1], x[3]])
 
     def measure_jac_complex(self, x):
-        return np.eye(len(x))
+        return np.array([
+            [1, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 0, 0, 1, 0],
+        ])
 
     def motion(self, x, u):
         if self.model=='basic':

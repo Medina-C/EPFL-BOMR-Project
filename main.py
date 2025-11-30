@@ -216,6 +216,8 @@ async def main():
     # plt.title("a log")
     plt.show()
 
+    pid.plot()
+
 # Setup tdm client
 async def init_tdm():
     global node, state
@@ -236,6 +238,7 @@ def init_global_path(cv_data, ymax):
         cv_coords_to_robot(p[0], p[1], ymax, p[2])
         for p in segments_cv
     ]
+    print(segments_robot)
     return segments_robot, plotter
 
 def cv_coords_to_robot(x, y, ymax, th=None):
@@ -286,15 +289,15 @@ theta_cv_log = []
 # TODO replace measurements with CV measurements
 def get_current_pose(ekf: EKF, vision, ymax):
     global node, theta_cv_log
-    vl = node['motor.left.speed']
-    vr = node['motor.right.speed']
+    vl = node['motor.left.speed'] * constants.robot['mtr_val_to_linear']
+    vr = node['motor.right.speed'] * constants.robot['mtr_val_to_linear']
     inputs = np.array([
-        vl * constants.robot['mtr_val_to_linear'], 
-        vr * constants.robot['mtr_val_to_linear']
+        vl , 
+        vr
     ])
     
 
-    v = (vl + vr) / constants.robot['wheel_base']
+    v = (vl + vr) / 2
     w = (vr - vl) / constants.robot['wheel_base']
     tt = time()
     vision.update_vision(False, False, False)
@@ -314,12 +317,12 @@ def get_current_pose(ekf: EKF, vision, ymax):
     velocity_data = vision.get_tag_velocity(4)
     
 
+    print(f'CV, robot: {velocity_data['speed_mm_s']}, {v}')
+
     measurements = [
         x,
         y,
-        velocity_data['speed_mm_s'],
         theta,
-        velocity_data['omega_rad_s']
     ]
 
     return ekf.generate_next_state(inputs, measurements)

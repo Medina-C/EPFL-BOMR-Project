@@ -1,4 +1,5 @@
 from constants import astolfi, robot, general, pid
+import matplotlib.pyplot as plt
 import numpy as np
 
 class PID:
@@ -7,6 +8,11 @@ class PID:
         self.prev_beta_error = 0
         self.sum_theta_error = 0
         self.sum_beta_error = 0
+
+        self.theta_log = []
+        self.beta_log = []
+        self.vl_log = []
+        self.vr_log = []
     
     def get_mtr_vels(self, state, goal):
         x0, y0, th0 = state[0], state[1], state[3]
@@ -25,6 +31,9 @@ class PID:
             beta_error = beta_error - 2*np.pi
         self.sum_beta_error += beta_error
         beta_error_diff = (beta_error - self.prev_beta_error)/general['dt']
+
+        self.theta_log.append(theta_error)
+        self.beta_log.append(beta_error)
 
         # 'Default' settings
         vl = general['drive_vel']
@@ -49,12 +58,31 @@ class PID:
 
         self.prev_theta_error = theta_error
         self.prev_beta_error = beta_error
+
+        self.vl_log.append(vl)
+        self.vr_log.append(vr)
         # print(vl, vr)
         return vl, vr
     
     def reset_integrals(self):
         self.sum_beta_error = 0
         self.sum_theta_error = 0
+
+    def plot(self):
+        plt.subplot(2, 1, 1)
+        plt.plot(self.theta_log)
+        plt.plot(self.beta_log)
+        plt.title("PID Error Logs")
+        plt.legend(['theta', 'beta'])
+
+        plt.subplot(2, 1, 2)
+        plt.plot(self.vl_log)
+        plt.plot(self.vr_log)
+        plt.title("Motor inputs")
+        plt.legend(['left', 'right'])
+        plt.show()
+
+
 
 def wrap_pi(angle):
     return (angle + np.pi) % (2*np.pi) - np.pi
