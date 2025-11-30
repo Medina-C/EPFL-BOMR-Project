@@ -33,6 +33,13 @@ class GlobalPlanner:
         self.path = None
         self.segments = None
 
+    @staticmethod
+    def _angle_mean(a: float, b: float) -> float:
+        return math.atan2(
+            math.sin(a) + math.sin(b),
+            math.cos(a) + math.cos(b),
+        )
+
     def _clamp_point(self, p: Point) -> Point:
         x, y = p
         x = min(max(float(x), 0.0), float(self.width))
@@ -41,7 +48,6 @@ class GlobalPlanner:
 
     def plan(self, start: Point = None) -> list:
         if start is not None:
-            # Also clamp dynamic start to map
             self.start = self._clamp_point(tuple(start))
 
         self.G = self.vg.with_terminals(self.start, self.goal)
@@ -55,7 +61,10 @@ class GlobalPlanner:
         )
         self.path = path
 
-        segments = []
+        segments: list[list[float]] = []
+        vertex_segment_idx: dict[int, int] = {}
+        segment_thetas: list[float] = []
+
         for i in range(len(path) - 1):
             x0, y0 = path[i]
             x1, y1 = path[i + 1]
@@ -65,8 +74,10 @@ class GlobalPlanner:
             if L == 0:
                 continue
             theta = math.atan2(dy, dx)
+            segment_thetas.append(theta)
             if i == 0:
                 segments.append([x0, y0, theta])
+                vertex_segment_idx[0] = 0
             d = self.spacing
             while d < L:
                 t = d / L
@@ -75,6 +86,15 @@ class GlobalPlanner:
                 segments.append([x, y, theta])
                 d += self.spacing
             segments.append([x1, y1, theta])
+            vertex_segment_idx[i + 1] = len(segments) - 1
+        n_vertices = len(path)
+        if n_vertices >= 3:
+            for j in range(1, n_vertices - 1):
+                idx = vertex_segment_idx[j]
+                theta_prev = segment_thetas[j - 1]
+                theta_next = segment_thetas[j]
+                theta_avg = self._angle_mean(theta_prev, theta_next)
+                segments[idx][2] = theta_avg
 
         self.segments = segments
         return segments

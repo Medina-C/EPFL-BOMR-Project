@@ -3,7 +3,7 @@
 
 general = {
     'dt': 0.22,
-    'goal_buffer': 50,
+    'goal_buffer': 30,
     'drive_vel': 130,
     'max_vel': 130,
     'max_accel': 20000,
@@ -42,7 +42,7 @@ pid = {
 }
 
 planning = {
-    'radius': 100,
+    'radius': 70,
     'spacing': 10000,
 }
 
@@ -54,7 +54,7 @@ tag_ids = {
 kidnapping = {
     "lifted_threshold": 50,
     "grounded_threshold": 100,
-    "wait_time": 5
+    "wait_time": 2
 }
 
 IDX_NO = 0

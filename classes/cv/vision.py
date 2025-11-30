@@ -34,7 +34,7 @@ class Vision:
     def start_video_capture(self, cam_index):
         cap = cv.VideoCapture(
             cam_index, 
-            cv.CAP_DSHOW
+            # cv.CAP_DSHOW
         )
         cap.set(cv.CAP_PROP_FRAME_WIDTH, 1920)
         cap.set(cv.CAP_PROP_FRAME_HEIGHT, 1080)
