@@ -47,7 +47,7 @@ async def main():
     global node, state, wait_start
     await init_tdm()
     
-    vision = Vision(0)
+    vision = Vision(1)
     
     while True:
         vision.update_vision(True, False, False)
@@ -164,7 +164,7 @@ async def main():
                 continue
 
             current_pose = get_current_pose(ekf, vision, ymax)
-            # print(current_pose)
+          
             state_log.append(current_pose)
 
             # Conditions
@@ -179,6 +179,7 @@ async def main():
                     break
             elif obstacle_detected(prox) and state == State.GLOBAL_NAV:
                 state = State.LOCAL_NAV
+                print("Local_ nav state")
 
             # Act based on states
             if state == State.GLOBAL_NAV:
@@ -187,6 +188,7 @@ async def main():
                 cleared = await local_nav.follow_edge(node, prox)
                 if cleared:
                     state = State.GLOBAL_NAV
+                    print("cleared local nav")
             else:
                 print(f"Invalid state {state}!")
 
@@ -310,6 +312,7 @@ def get_current_pose(ekf: EKF, vision, ymax):
     theta_cv_log.append(theta)
 
     velocity_data = vision.get_tag_velocity(4)
+    
 
     measurements = [
         x,
@@ -336,8 +339,15 @@ def obstacle_detected(prox):
     right = max(prox[IDX_NNE], prox[IDX_NE])
     front_left = prox[IDX_NNO]
     front_right = prox[IDX_NNE]
+    far_left = prox[IDX_NO]  # Far left sensor
+    far_right = prox[IDX_NE]  # Far right sensor
         
-    return front >= FRONT_THRESHOLD or front_left >= FRONT_THRESHOLD or front_right >= FRONT_THRESHOLD
+    # Check all front-facing sensors including far left and far right
+    return (front >= DETECTION_THRESHOLD or 
+            front_left >= DETECTION_THRESHOLD or 
+            front_right >= DETECTION_THRESHOLD or
+            far_left >= DETECTION_THRESHOLD or
+            far_right >= DETECTION_THRESHOLD)
 
 async def global_nav(start_pose, goal_pose, pid: PID):
     global a_log

@@ -27,7 +27,6 @@ Notes:
 """
 
 from tdmclient import ClientAsync, aw
-import asyncio
 import os
 import csv
 import time
@@ -35,15 +34,14 @@ import time
 # ---------------------------
 # Configuration
 # ---------------------------
-FRONT_THRESHOLD = 1300   # detect obstacle early (increased for earlier detection of spontaneous obstacles)
-SIDE_THRESHOLD = 1000
-CLEAR_THRESHOLD = 800
+FRONT_THRESHOLD = 1600   # threshold for backup safety check (lower = triggers earlier when closer)
+CLEAR_THRESHOLD = 800   # threshold for exit condition (lower = exits when sensors are lower/clearer)
 CHECK_INTERVAL = 0.05    # seconds between loop iterations
 FORWARD_SPEED = 160      # forward speed
 TURN_SPEED = 160         # turning base speed used in corrections
-PROPORTIONAL_GAIN = 0.0005  # proportional gain for side error -> motor differential (reduced to minimize turning)
-TARGET_SIDE_VALUE = 1000  # desired side prox reading while following (tunable)
-EXIT_CONSISTENT_COUNT = 6  # number of consecutive "clear" readings to exit
+PROPORTIONAL_GAIN = 0.001  # proportional gain for side error -> motor differential (increased for more reactivity)
+TARGET_SIDE_VALUE = 1200  # desired side prox reading while following (higher = maintain closer distance to edge, lower = maintain farther distance)
+EXIT_CONSISTENT_COUNT = 5    # number of consecutive "clear" readings to exit
 
 # sensor indices for prox.horizontal (front arc only)
 # 0: NO  (front-left outer), 1: NNO (front-left inner),
@@ -65,20 +63,11 @@ IDX_NE = 4
 class LocalNav():
     def __init__(self):
         self.clear_count = 0
+        self.follow_side = None  # Track which side we're following
 
     async def follow_edge(self, node, prox):
-        """Mirror of follow_left_edge for right side."""
-
-        left_val = max(prox[IDX_NO], prox[IDX_NNO])
-        right_val = max(prox[IDX_NNE], prox[IDX_NE])
-        left_score = left_val + prox[IDX_NNO] * 0.5
-        right_score = right_val + prox[IDX_NNE] * 0.5
-
-        if left_score >= right_score:
-            state =  "left"
-        else:
-            state = "right"
-
+        """Edge-following with proportional control. Called from main loop."""
+        
         left_outer = prox[IDX_NO]
         left_inner = prox[IDX_NNO]
         left_val = max(left_outer, left_inner)
@@ -90,7 +79,17 @@ class LocalNav():
         right_val = max(right_inner, right_outer)
         front_right_val = right_inner
 
-        if state == "left":
+        # Decide which side to follow (only once at the start)
+        if self.follow_side is None:
+            left_score = left_val + prox[IDX_NNO] * 0.5
+            right_score = right_val + prox[IDX_NNE] * 0.5
+            if left_score >= right_score:
+                self.follow_side = "left"
+            else:
+                self.follow_side = "right"
+
+        # FOLLOWING PHASE: Use proportional control to maintain distance along the edge
+        if self.follow_side == "left":
             sensor1 = left_val
             sensor2 = front_left_val
         else:
@@ -100,28 +99,42 @@ class LocalNav():
         # error: positive means too far, negative means too close
         error = TARGET_SIDE_VALUE - sensor1
         diff = PROPORTIONAL_GAIN * error * TURN_SPEED
+        
+        # Limit diff to ensure both motors always move forward (prevent in-place turning)
+        max_diff = FORWARD_SPEED * 0.8  # Allow up to 80% of forward speed as differential
+        diff = clamp(diff, -max_diff, max_diff)
 
-        if state == 'left':
+        if self.follow_side == 'left':
             left_speed = FORWARD_SPEED - diff
             right_speed = FORWARD_SPEED + diff
-        elif state == 'right':
+        elif self.follow_side == 'right':
             left_speed = FORWARD_SPEED + diff
             right_speed = FORWARD_SPEED - diff
 
         left_speed = clamp(left_speed, -500, 500)
         right_speed = clamp(right_speed, -500, 500)
 
+        await set_motors(node, left_speed, right_speed)
+
+        # SAFETY: Back up if too close
         if front_val > FRONT_THRESHOLD * 1.4:
             await set_motors(node, -100, -100)
-        else:
-            await set_motors(node, left_speed, right_speed)
 
+        # Check for clearance
         if sensor1 < CLEAR_THRESHOLD and sensor2 < CLEAR_THRESHOLD:
             self.clear_count += 1
+            await set_motors(node, 100, 100)
+    
         else:
             self.clear_count = 0
 
-        return self.clear_count >= EXIT_CONSISTENT_COUNT
+        cleared = self.clear_count >= EXIT_CONSISTENT_COUNT
+        if cleared:
+            # Reset state for next obstacle
+            self.follow_side = None
+            self.clear_count = 0
+        
+        return cleared
 
 
 def read_prox(node):
