@@ -47,12 +47,16 @@ async def main():
     global node, state, wait_start
     await init_tdm()
     
-    vision = Vision(1)
+    vision = Vision(0)
+    cv.namedWindow('frame', cv.WINDOW_NORMAL)
+    cv.resizeWindow('frame', DISP_FRAME_W, DISP_FRAME_H)
     
     while True:
-        vision.update_vision(True, False, False)
+        vision.update_vision(False, False, False)
         if vision.frame_disp is not None:
             cv.imshow('frame', vision.frame_disp)
+            cv.resizeWindow('frame', (DISP_FRAME_W, DISP_FRAME_H))
+
         key = cv.waitKey(1) & 0xFF
         if key == 27:  # ESC -> exit
             break
@@ -62,33 +66,24 @@ async def main():
     vision.get_tag_pose(4)
     vision.get_tag_pose(5)
     cv_data = []
-    if vision.obstacles is not None:
+    if vision.obstacles is None or vision.thymio_pose is None or vision.target_pose is None:
+        print('[VISION] error getting cv_data')
+    else:
         cv_data = vision.obstacles.copy()
-
-    if vision.thymio_pose is not None:
         cv_data.append(vision.thymio_pose['pose_mm'].flatten())
-
-    if vision.target_pose is not None:
-        # pass
         cv_data.append(vision.target_pose['pose_mm'].flatten())
-    # cv_data.append(np.array([1100, 800]))
-    print(f'final data={cv_data}')
 
     x = vision.thymio_pose['pose_mm'].flatten()[0]
     y = vision.thymio_pose['pose_mm'].flatten()[1]
     theta = vision.thymio_pose['theta']
 
     ymax = cv_data[0][1]
-    print(f'init before transfo x={x}, y={y}, theta={theta}')
     x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
-    print(f'init after transfo x={x}, y={y}, theta={theta}')
     start_pose = (x, y, 0, theta, 0)
     
-
-    goals, plotter = init_global_path(cv_data, ymax)
+    goals_cv, goals, plotter = init_global_path(cv_data, ymax)
     g = 0
     goal_pose = goals[g]
-    print(f'goal_pose={goal_pose}')
 
     # class initialization
     ekf = EKF(
@@ -107,10 +102,12 @@ async def main():
 
     # Main loop
     while state != State.STOP:
-        #print(state)
         t = time()
         prox = read_prox(node)
-        cv.imshow("frame", vision.frame_disp)
+        
+        vision.update_disp_frame(state_log, goals_cv, cv_data[0][1])        
+        cv.imshow('frame', vision.frame_disp)
+        cv.resizeWindow('frame', (1920, 1080))
         cv.waitKey(1)
 
         if is_lifted(node):
@@ -139,7 +136,7 @@ async def main():
                 cv_data2.append(vision.thymio_pose['pose_mm'].flatten())
                 cv_data2.append(cv_data[-1])
 
-                goals, plotter = init_global_path(cv_data2, ymax)
+                goals_cv, goals, plotter = init_global_path(cv_data2, ymax)
                 g = 0
                 goal_pose = goals[g]
 
@@ -164,7 +161,6 @@ async def main():
                 continue
 
             current_pose = get_current_pose(ekf, vision, ymax)
-          
             state_log.append(current_pose)
 
             # Conditions
@@ -238,8 +234,7 @@ def init_global_path(cv_data, ymax):
         cv_coords_to_robot(p[0], p[1], ymax, p[2])
         for p in segments_cv
     ]
-    print(segments_robot)
-    return segments_robot, plotter
+    return segments_cv, segments_robot, plotter
 
 def cv_coords_to_robot(x, y, ymax, th=None):
     if th is None: 
@@ -295,22 +290,16 @@ def get_current_pose(ekf: EKF, vision, ymax):
         vl , 
         vr
     ])
-    
 
-    v = (vl + vr) / 2
+    v = (vl + vr) / constants.robot['wheel_base']
     w = (vr - vl) / constants.robot['wheel_base']
-    tt = time()
+
     vision.update_vision(False, False, False)
-    #print(f'time for vision upd={time() - tt}')
-    tt = time()
     vision.get_tag_pose(4)
-    
-    #print(f'time for tag pose={time() - tt}')
     x = vision.thymio_pose['pose_mm'].flatten()[0]
     y = vision.thymio_pose['pose_mm'].flatten()[1]
     theta = vision.thymio_pose['theta']
     x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
-    #print(f'[get_cur_pose] x={x} y={y} theta={theta}')
 
     theta_cv_log.append(theta)
 

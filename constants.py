@@ -71,3 +71,17 @@ TURN_SPEED = 160         # turning base speed used in corrections
 PROPORTIONAL_GAIN = 0.0005  # proportional gain for side error -> motor differential (reduced to minimize turning)
 TARGET_SIDE_VALUE = 1000  # desired side prox reading while following (tunable)
 EXIT_CONSISTENT_COUNT = 6  # number of consecutive "clear" readings to exit
+
+# Adrien CV
+MAP_W = 1260    #in mm
+MAP_H = 890     #in mm
+THYMIO_ID = 4
+TARGET_ID = 5
+
+
+A4_W = 210  #in mm
+A4_H = 297  #in mm
+IRL_MAP_DIST_W = 4*A4_W - 28    #in mm
+
+DISP_FRAME_W = 960
+DISP_FRAME_H = 540
