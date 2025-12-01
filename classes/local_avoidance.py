@@ -114,16 +114,17 @@ class LocalNav():
         left_speed = clamp(left_speed, -500, 500)
         right_speed = clamp(right_speed, -500, 500)
 
-        await set_motors(node, left_speed, right_speed)
-
         # SAFETY: Back up if too close
-        if front_val > FRONT_THRESHOLD * 1.4:
-            await set_motors(node, -100, -100)
+        if front_val > FRONT_THRESHOLD * 1.1:
+            await set_motors(node, -120, -120)
+        else:
+            await set_motors(node, left_speed, right_speed)
+            
 
         # Check for clearance
         if sensor1 < CLEAR_THRESHOLD and sensor2 < CLEAR_THRESHOLD:
             self.clear_count += 1
-            await set_motors(node, 100, 100)
+            #await set_motors(node, 100, 100)
     
         else:
             self.clear_count = 0

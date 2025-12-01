@@ -13,6 +13,7 @@ class EKF:
         self.T = robot_wd
         self.dt = dt
         self.model = model
+        self.tag_seen = True
 
     def generate_next_state(self, inputs, measures):
         # Belief step

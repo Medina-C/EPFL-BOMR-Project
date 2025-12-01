@@ -113,15 +113,15 @@ class Vision:
 
     def get_tag_pose(self, id):
         if self.ids is None:
-            print(f'[VISION] no tags detected currently')
-            return 
+            #print(f'[VISION] no tags detected currently')
+            return False # Failed
         ids_flat = self.ids.flatten()
         if id in ids_flat:
             idx = np.where(ids_flat == id)[0][0]
             target_corners = self.corners[idx][0]
         else: 
-            print(f'[VISION] tag id= {id} not detected')
-            return
+            #print(f'[VISION] tag id= {id} not detected')
+            return False # Failed
 
         pts = target_corners.reshape(-1, 1, 2)
         target_center_px = None
@@ -138,8 +138,8 @@ class Vision:
         theta =  math.atan2(v[1], v[0])
         
         if id == THYMIO_ID:
-            target_center_mm[0][0] += 95*np.cos(theta)
-            target_center_mm[0][1] += 95*np.sin(theta) 
+            target_center_mm[0][0] += 80*np.cos(theta)
+            target_center_mm[0][1] += 80*np.sin(theta) 
 
             self.thymio_pose = {'pose_mm': target_center_mm,
                                 'pose_undist_px': None,
@@ -148,6 +148,8 @@ class Vision:
             self.target_pose = {'pose_mm': target_center_mm,
                                 'pose_undist_px': None,
                                 'theta': theta}
+            
+        return True # True for success
     
     def get_tag_velocity(self, id):
         self.get_tag_pose(id)

@@ -47,7 +47,7 @@ async def main():
     global node, state, wait_start
     await init_tdm()
     
-    vision = Vision(0)
+    vision = Vision(1)
     cv.namedWindow('frame', cv.WINDOW_NORMAL)
     cv.resizeWindow('frame', DISP_FRAME_W, DISP_FRAME_H)
     
@@ -115,6 +115,10 @@ async def main():
             nav_ready = False
         elif state == State.KIDNAPPED and is_grounded(node):
             state = State.WAIT
+            # TODO bandaid fix, but it works
+            for i in range(3):
+                await client.sleep(1)
+                vision.update_vision(True, True, True)
             wait_start = time()
 
         if state == State.KIDNAPPED:
@@ -295,18 +299,23 @@ def get_current_pose(ekf: EKF, vision, ymax):
     w = (vr - vl) / constants.robot['wheel_base']
 
     vision.update_vision(False, False, False)
-    vision.get_tag_pose(4)
+    tag_seen = vision.get_tag_pose(4)
+
+    if (not tag_seen) and (ekf.tag_seen):
+        ekf.tag_seen = False
+        ekf.R = np.eye(3)*999999
+        print(f'Tag hidden, setting R={ekf.R}')
+    elif (tag_seen) and (not ekf.tag_seen):
+        ekf.tag_seen = True
+        ekf.R = np.diag(constants.ekf['measure_vars'])
+        print(f"Tag visible, setting R={ekf.R}")
+
     x = vision.thymio_pose['pose_mm'].flatten()[0]
     y = vision.thymio_pose['pose_mm'].flatten()[1]
     theta = vision.thymio_pose['theta']
     x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
 
     theta_cv_log.append(theta)
-
-    velocity_data = vision.get_tag_velocity(4)
-    
-
-    print(f'CV, robot: {velocity_data['speed_mm_s']}, {v}')
 
     measurements = [
         x,

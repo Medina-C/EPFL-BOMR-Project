@@ -11,6 +11,8 @@ class PID:
 
         self.theta_log = []
         self.beta_log = []
+        self.beta_d_log = []
+        self.beta_i_log = []
         self.vl_log = []
         self.vr_log = []
     
@@ -34,6 +36,8 @@ class PID:
 
         self.theta_log.append(theta_error)
         self.beta_log.append(beta_error)
+        self.beta_d_log.append(beta_error_diff)
+        self.beta_i_log.append(self.sum_beta_error)
 
         # 'Default' settings
         vl = general['drive_vel']
@@ -70,10 +74,12 @@ class PID:
 
     def plot(self):
         plt.subplot(2, 1, 1)
-        plt.plot(self.theta_log)
+        #plt.plot(self.theta_log)
         plt.plot(self.beta_log)
+        plt.plot(self.beta_i_log)
+        plt.plot(self.beta_d_log)
         plt.title("PID Error Logs")
-        plt.legend(['theta', 'beta'])
+        plt.legend(['p', 'i', 'd'])
 
         plt.subplot(2, 1, 2)
         plt.plot(self.vl_log)
