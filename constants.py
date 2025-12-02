@@ -4,8 +4,8 @@
 general = {
     'dt': 0.22,
     'goal_buffer': 50,
-    'drive_vel': 65,
-    'max_vel': 65,
+    'drive_vel': 130,
+    'max_vel': 130,
     'max_accel': 20000,
     'max_w': 0.7,
 }
@@ -35,8 +35,8 @@ pid = {
         'kd': 0, 
     },
     'beta': {
-        'kp': 40,
-        'ki': 0.75,
+        'kp': 80,
+        'ki': 1.5,
         'kd': 0,
     }
 }

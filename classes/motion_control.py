@@ -1,13 +1,16 @@
-from constants import astolfi, robot, general, pid
+from constants import general
+import constants
 import matplotlib.pyplot as plt
 import numpy as np
 
 class PID:
-    def __init__(self):
+    def __init__(self, pid_consts = constants.pid):
         self.prev_theta_error = 0
         self.prev_beta_error = 0
         self.sum_theta_error = 0
         self.sum_beta_error = 0
+
+        self.pid_consts = pid_consts
 
         self.theta_log = []
         self.beta_log = []
@@ -44,16 +47,16 @@ class PID:
         vr = general['drive_vel']
 
         # Proportional control
-        vl += pid['theta']['kp']*theta_error + pid['beta']['kp']*beta_error
-        vr -= pid['theta']['kp']*theta_error + pid['beta']['kp']*beta_error
+        vl += self.pid_consts['theta']['kp']*theta_error + self.pid_consts['beta']['kp']*beta_error
+        vr -= self.pid_consts['theta']['kp']*theta_error + self.pid_consts['beta']['kp']*beta_error
 
         # Integral control
-        vl += pid['theta']['ki']*self.sum_theta_error + pid['beta']['ki']*self.sum_beta_error
-        vr -= pid['theta']['ki']*self.sum_theta_error + pid['beta']['ki']*self.sum_beta_error
+        vl += self.pid_consts['theta']['ki']*self.sum_theta_error + self.pid_consts['beta']['ki']*self.sum_beta_error
+        vr -= self.pid_consts['theta']['ki']*self.sum_theta_error + self.pid_consts['beta']['ki']*self.sum_beta_error
 
         # Derivative control
-        vl += pid['theta']['kd']*theta_error_diff + pid['beta']['kd']*beta_error_diff
-        vr -= pid['theta']['kd']*theta_error_diff + pid['beta']['kd']*beta_error_diff
+        vl += self.pid_consts['theta']['kd']*theta_error_diff + self.pid_consts['beta']['kd']*beta_error_diff
+        vr -= self.pid_consts['theta']['kd']*theta_error_diff + self.pid_consts['beta']['kd']*beta_error_diff
 
         if abs(vl) > general['max_vel']:
             vl = np.sign(vl)*general['max_vel']
@@ -87,8 +90,6 @@ class PID:
         plt.title("Motor inputs")
         plt.legend(['left', 'right'])
         plt.show()
-
-
 
 def wrap_pi(angle):
     return (angle + np.pi) % (2*np.pi) - np.pi

@@ -89,7 +89,6 @@ async def main():
     ekf = EKF(
         np.diag(constants.ekf['move_vars']), 
         np.diag(constants.ekf['measure_vars']),
-        'complex',
         start_pose,
         constants.robot['wheel_base'],
         constants.general['dt']
