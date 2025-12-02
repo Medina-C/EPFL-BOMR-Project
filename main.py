@@ -1,5 +1,5 @@
-import constants as constants
-from constants import *  # TODO ugly, change
+import constants
+from constants import * 
 from classes.ekf import EKF
 from classes.motion_control import PID
 from classes.local_avoidance import LocalNav, read_prox
@@ -50,38 +50,42 @@ async def main():
     vision = Vision(1)
     cv.namedWindow('frame', cv.WINDOW_NORMAL)
     cv.resizeWindow('frame', DISP_FRAME_W, DISP_FRAME_H)
+
+    goals = None
     
-    while True:
-        vision.update_vision(False, False, False)
-        if vision.frame_disp is not None:
-            cv.imshow('frame', vision.frame_disp)
-            cv.resizeWindow('frame', (DISP_FRAME_W, DISP_FRAME_H))
+    while goals is None:
+        while True:
+            vision.update_vision(False, False, False)
+            if vision.frame_disp is not None:
+                cv.imshow('frame', vision.frame_disp)
+                cv.resizeWindow('frame', (DISP_FRAME_W, DISP_FRAME_H))
 
-        key = cv.waitKey(1) & 0xFF
-        if key == 27:  # ESC -> exit
-            break
-        if key == ord('h'):
-            vision.update_vision(True, True, True) 
+            key = cv.waitKey(1) & 0xFF
+            if key == 27:  # ESC -> exit
+                break
+            if key == ord('h'):
+                vision.update_vision(True, True, True) 
 
-    vision.get_tag_pose(4)
-    vision.get_tag_pose(5)
-    cv_data = []
-    if vision.obstacles is None or vision.thymio_pose is None or vision.target_pose is None:
-        print('[VISION] error getting cv_data')
-    else:
-        cv_data = vision.obstacles.copy()
-        cv_data.append(vision.thymio_pose['pose_mm'].flatten())
-        cv_data.append(vision.target_pose['pose_mm'].flatten())
+        vision.get_tag_pose(4)
+        vision.get_tag_pose(5)
+        cv_data = []
+        if vision.obstacles is None or vision.thymio_pose is None or vision.target_pose is None:
+            print('[VISION] error getting cv_data')
+        else:
+            cv_data = vision.obstacles.copy()
+            cv_data.append(vision.thymio_pose['pose_mm'].flatten())
+            cv_data.append(vision.target_pose['pose_mm'].flatten())
 
-    x = vision.thymio_pose['pose_mm'].flatten()[0]
-    y = vision.thymio_pose['pose_mm'].flatten()[1]
-    theta = vision.thymio_pose['theta']
+        x = vision.thymio_pose['pose_mm'].flatten()[0]
+        y = vision.thymio_pose['pose_mm'].flatten()[1]
+        theta = vision.thymio_pose['theta']
 
-    ymax = cv_data[0][1]
-    x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
-    start_pose = (x, y, 0, theta, 0)
-    
-    goals_cv, goals, plotter = init_global_path(cv_data, ymax)
+        ymax = cv_data[0][1]
+        x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
+        start_pose = (x, y, 0, theta, 0)
+        
+        goals_cv, goals, plotter = init_global_path(cv_data, ymax)
+    print(goals)
     g = 0
     goal_pose = goals[g]
 
@@ -96,6 +100,7 @@ async def main():
     pid = PID()
     local_nav = LocalNav()
     state_log = [start_pose]
+    cov_matrix = ekf.P[0:2, 0:2]
 
     nav_ready = True
 
@@ -104,7 +109,7 @@ async def main():
         t = time()
         prox = read_prox(node)
         
-        vision.update_disp_frame(state_log, goals_cv, cv_data[0][1])        
+        vision.update_disp_frame(state_log, goals_cv, cv_data[0][1], cov_matrix)        
         cv.imshow('frame', vision.frame_disp)
         cv.resizeWindow('frame', (1920, 1080))
         cv.waitKey(1)
@@ -114,10 +119,8 @@ async def main():
             nav_ready = False
         elif state == State.KIDNAPPED and is_grounded(node):
             state = State.WAIT
-            # TODO bandaid fix, but it works
-            for i in range(3):
-                await client.sleep(1)
-                vision.update_vision(True, True, True)
+            await client.sleep(1)
+            vision.update_vision(True, True, True)
             wait_start = time()
 
         if state == State.KIDNAPPED:
@@ -146,7 +149,6 @@ async def main():
                 ekf = EKF(
                     np.diag(constants.ekf['move_vars']), 
                     np.diag(constants.ekf['measure_vars']),
-                    'complex',
                     start_pose,
                     constants.robot['wheel_base'],
                     constants.general['dt']
@@ -163,7 +165,7 @@ async def main():
                     await client.sleep(sleep_time)
                 continue
 
-            current_pose = get_current_pose(ekf, vision, ymax)
+            current_pose, cov_matrix = get_current_pose(ekf, vision, ymax)
             state_log.append(current_pose)
 
             # Conditions
@@ -171,6 +173,7 @@ async def main():
                 g += 1
                 pid.reset_integrals()
                 if g < len(goals):
+                    print(f"Next goal: {goals[g]}")
                     goal_pose = goals[g]
                 else:
                     print("Reached goal!")
@@ -232,6 +235,8 @@ def init_global_path(cv_data, ymax):
     plotter = Plotter(planner)
 
     segments_cv = planner.plan()
+    if segments_cv is None:
+        return None, None, None
     plotter.path()
     segments_robot = [
         cv_coords_to_robot(p[0], p[1], ymax, p[2])
@@ -294,7 +299,7 @@ def get_current_pose(ekf: EKF, vision, ymax):
         vr
     ])
 
-    v = (vl + vr) / constants.robot['wheel_base']
+    v = (vl + vr) / 2
     w = (vr - vl) / constants.robot['wheel_base']
 
     vision.update_vision(False, False, False)
@@ -303,11 +308,11 @@ def get_current_pose(ekf: EKF, vision, ymax):
     if (not tag_seen) and (ekf.tag_seen):
         ekf.tag_seen = False
         ekf.R = np.eye(3)*999999
-        print(f'Tag hidden, setting R={ekf.R}')
+        #print(f'Tag hidden, setting R={ekf.R}')
     elif (tag_seen) and (not ekf.tag_seen):
         ekf.tag_seen = True
         ekf.R = np.diag(constants.ekf['measure_vars'])
-        print(f"Tag visible, setting R={ekf.R}")
+        #print(f"Tag visible, setting R={ekf.R}")
 
     x = vision.thymio_pose['pose_mm'].flatten()[0]
     y = vision.thymio_pose['pose_mm'].flatten()[1]
@@ -322,7 +327,9 @@ def get_current_pose(ekf: EKF, vision, ymax):
         theta,
     ]
 
-    return ekf.generate_next_state(inputs, measurements)
+    state_estimate, cov_matrix = ekf.generate_next_state(inputs, measurements)
+
+    return state_estimate, cov_matrix
 
 def reached_goal(current, goal):
     px, py = current[0], current[1]

@@ -27,7 +27,7 @@ class EKF:
         self.state = state_bel + K @ (measures - self.measure(state_bel))
         self.P = (np.eye(np.size(K, 0)) - K @ H) @ P_bel
 
-        return self.state
+        return self.state, self.P[0:2, 0:2]
 
     def motion(self, x, u):
         px0, py0, v0, th0, w0 = x[0], x[1], x[2], x[3], x[4]

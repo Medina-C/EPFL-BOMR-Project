@@ -3,9 +3,9 @@
 
 general = {
     'dt': 0.22,
-    'goal_buffer': 50,
-    'drive_vel': 130,
-    'max_vel': 130,
+    'goal_buffer': 40,
+    'drive_vel': 130*2/3,
+    'max_vel': 130*2/3,
     'max_accel': 20000,
     'max_w': 0.7,
 }
@@ -30,14 +30,14 @@ astolfi = {
 
 pid = {
     'theta': {  
-        'kp': 2,
+        'kp': 2*2/3,
         'ki': 0,
         'kd': 0, 
     },
     'beta': {
-        'kp': 80,
-        'ki': 1.5,
-        'kd': 0,
+        'kp': 80*2/3,
+        'ki': 2/3,
+        'kd': 2/3,
     }
 }
 

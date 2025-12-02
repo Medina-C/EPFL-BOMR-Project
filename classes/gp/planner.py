@@ -46,19 +46,23 @@ class GlobalPlanner:
         y = min(max(float(y), 0.0), float(self.height))
         return (x, y)
 
-    def plan(self, start: Point = None) -> list:
+    def plan(self, start: Point = None):
         if start is not None:
             self.start = self._clamp_point(tuple(start))
 
         self.G = self.vg.with_terminals(self.start, self.goal)
 
-        path = nx.astar_path(
-            self.G,
-            self.start,
-            self.goal,
-            heuristic=lambda a, b: dist(a, b),
-            weight="weight",
-        )
+        try:
+            path = nx.astar_path(
+                self.G,
+                self.start,
+                self.goal,
+                heuristic=lambda a, b: dist(a, b),
+                weight="weight",
+            )
+        except:
+            print("No path found :(")
+            return None
         self.path = path
 
         segments: list[list[float]] = []

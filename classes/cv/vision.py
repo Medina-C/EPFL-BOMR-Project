@@ -16,6 +16,7 @@ class Vision:
         self.cap = self.start_video_capture(cam_index)
         self.aruco_dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_6X6_50)
         params = cv.aruco.DetectorParameters()
+        params.cornerRefinementMethod = cv.aruco.CORNER_REFINE_SUBPIX
         self.detector = cv.aruco.ArucoDetector(self.aruco_dict, params)
         self.camera_calib = np.load('classes/cv/vision_auxiliary/camera_calib_param.npz')
         self.frame_raw = None
@@ -302,7 +303,7 @@ class Vision:
                 print('[VISION] found obstacles')
 
     
-    def update_disp_frame(self, state_log, goals_cv, y_calib=MAP_H):
+    def update_disp_frame(self, state_log, goals_cv, y_calib=MAP_H, cov_matrix=None):
         if self.frame_disp is None:
             return
 
@@ -338,6 +339,28 @@ class Vision:
                     (pts_undist[i][0], pts_undist[i][1]),
                     (pts_undist[i + 1][0], pts_undist[i + 1][1]),
                     (255, 130, 0), 2)
+                
+        if cov_matrix is not None:
+            eig_vals, eig_vects = np.linalg.eig(cov_matrix)
+            sig_val1 = int(np.sqrt(eig_vals[0])*self.scale)
+            sig_val2 = int(np.sqrt(eig_vals[1])*self.scale)
+
+            if sig_val1 < 1:
+                return
+            if sig_val2 < 1:
+                return
+
+            print(sig_val1, sig_val2)
+            theta = np.degrees(np.arctan2(eig_vects[1,1], eig_vects[0,1]))
+            x = int(state_log[-1][0])
+            y = int(y_calib - state_log[-1][1])
+            pt = (x,y)
+            print(f'pt={pt}')
+            
+            center = self.convert_points_mm_to_undist([pt])[0]
+            print(f' enter={center}')
+            cv.ellipse(self.frame_disp, center, (sig_val1,sig_val2), theta, 0, 360, (255, 0, 0), 5)
+
 
 
     def convert_points_mm_to_undist(self, pts):

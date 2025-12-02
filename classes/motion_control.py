@@ -34,6 +34,8 @@ class PID:
         beta_error = th0 - angle_to_goal
         if beta_error > np.pi:
             beta_error = beta_error - 2*np.pi
+        if beta_error < -np.pi:
+            beta_error = beta_error + 2*np.pi
         self.sum_beta_error += beta_error
         beta_error_diff = (beta_error - self.prev_beta_error)/general['dt']
 
