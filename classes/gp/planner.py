@@ -61,7 +61,7 @@ class GlobalPlanner:
                 weight="weight",
             )
         except:
-            print("No path found :(")
+            print("No path found")
             return None
         self.path = path
 

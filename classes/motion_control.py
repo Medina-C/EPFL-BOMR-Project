@@ -98,17 +98,25 @@ class PID:
         self.sum_theta_error = 0
 
     def plot(self):
+        plt.figure(figsize=[6.4, 7])
+
         plt.subplot(2, 1, 1)
+        plt.plot(self.theta_log)
         plt.plot(self.beta_log)
         plt.plot(self.beta_i_log)
         plt.plot(self.beta_d_log)
         plt.title("PID Error Logs")
         plt.legend(['p - theta', 'p - beta', 'i - beta', 'd - beta'])
+        #plt.xlabel("Time step k")
+        plt.ylabel("Magnitude [rad]")
 
         plt.subplot(2, 1, 2)
         plt.plot(self.vl_log)
         plt.plot(self.vr_log)
         plt.title("Motor inputs")
         plt.legend(['left', 'right'])
-        plt.show()
+        plt.xlabel("Time step k")
+        plt.ylabel("Magnitude [rad]")
+
+        #plt.show()
         

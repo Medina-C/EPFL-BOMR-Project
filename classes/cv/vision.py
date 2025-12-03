@@ -8,7 +8,7 @@ MAP_H = 890     # in mm
 THYMIO_ID = 4
 TARGET_ID = 5
 TAG_OFFSET = 80     # in mm
-MIN_OBSTACLE_AREA = 100     # in mm
+MIN_OBSTACLE_AREA = 110     # in mm
 DISP_FRAME_W = 960      # in px
 DISP_FRAME_H = 540      # in px
 
@@ -210,6 +210,7 @@ class Vision:
         # morphology to remove small specks
         kernel = np.ones((3, 3), np.uint8)
         threshold = cv.morphologyEx(threshold, cv.MORPH_OPEN, kernel, iterations=1)
+        threshold = cv.dilate(threshold, kernel, iterations=1)
 
         cv.imwrite("classes/cv/results/debug_threshold.png", threshold)
 
@@ -234,7 +235,7 @@ class Vision:
                 continue
 
             perimeter = cv.arcLength(cont, True)
-            epsilon = 0.015 * perimeter
+            epsilon = 0.01 * perimeter
             approx = cv.approxPolyDP(cont, epsilon, True)
 
             if not cv.isContourConvex(approx):
