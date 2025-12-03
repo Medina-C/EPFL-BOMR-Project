@@ -14,78 +14,29 @@ from time import time
 import cv2 as cv
 from enum import Enum
 
-LT = constants.kidnapping["lifted_threshold"]
-GT = constants.kidnapping["grounded_threshold"]
-WT = constants.kidnapping["wait_time"]
-
+# Enum for storing robot states
 class State(str, Enum):
-    GLOBAL_NAV = "global_nav"
-    LOCAL_NAV = "local_nav"
-    KIDNAPPED = "kidnapped"
-    WAIT = "wait"
-    STOP = "stop"
+    GLOBAL_NAV = "global_nav" # Follow global path
+    LOCAL_NAV = "local_nav" # Avoid local obsacle
+    KIDNAPPED = "kidnapped" # Kidnapped (currently in the air)
+    WAIT = "wait" # Wait time after kidnapping
+    STOP = "stop" # Program over
 
-
-def is_lifted(node):
-    g = node["prox.ground.delta"]
-    return g[0] < LT and g[1] < LT
-
-
-def is_grounded(node):
-    g = node["prox.ground.delta"]
-    return g[0] > GT and g[1] > GT
-
-
+# Initialize global variables
 state = State.GLOBAL_NAV
-a_log = []
-theta_cv_log = []
 wait_start = None
-
 
 # Main program
 async def main():
     global node, state, wait_start
-    await init_tdm()
+    await init_tdm() # Initialize Thymio
     
     vision = Vision(1)
     cv.namedWindow('frame', cv.WINDOW_NORMAL)
     cv.resizeWindow('frame', DISP_FRAME_W, DISP_FRAME_H)
 
-    goals = None
-    
-    while goals is None:
-        while True:
-            vision.update_vision(False, False, False)
-            if vision.frame_disp is not None:
-                cv.imshow('frame', vision.frame_disp)
-                cv.resizeWindow('frame', (DISP_FRAME_W, DISP_FRAME_H))
+    start_pose, goals, goals_cv, plotter, cv_data, ymax = init_vision(vision)
 
-            key = cv.waitKey(1) & 0xFF
-            if key == 27:  # ESC -> exit
-                break
-            if key == ord('h'):
-                vision.update_vision(True, True, True) 
-
-        vision.get_tag_pose(4)
-        vision.get_tag_pose(5)
-        cv_data = []
-        if vision.obstacles is None or vision.thymio_pose is None or vision.target_pose is None:
-            print('[VISION] error getting cv_data')
-        else:
-            cv_data = vision.obstacles.copy()
-            cv_data.append(vision.thymio_pose['pose_mm'].flatten())
-            cv_data.append(vision.target_pose['pose_mm'].flatten())
-
-        x = vision.thymio_pose['pose_mm'].flatten()[0]
-        y = vision.thymio_pose['pose_mm'].flatten()[1]
-        theta = vision.thymio_pose['theta']
-
-        ymax = cv_data[0][1]
-        x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
-        start_pose = (x, y, 0, theta, 0)
-        
-        goals_cv, goals, plotter = init_global_path(cv_data, ymax)
-    print(goals)
     g = 0
     goal_pose = goals[g]
 
@@ -114,74 +65,52 @@ async def main():
         cv.resizeWindow('frame', (1920, 1080))
         cv.waitKey(1)
 
-        if is_lifted(node):
+        # Check for kidnapping conditions, that overrides path following
+        if is_lifted():
             state = State.KIDNAPPED
             nav_ready = False
-        elif state == State.KIDNAPPED and is_grounded(node):
+        # Check if we've been un-kidnapped
+        elif state == State.KIDNAPPED and is_grounded():
             state = State.WAIT
             await client.sleep(1)
             vision.update_vision(True, True, True)
             wait_start = time()
 
+        # If kidnapped, stop
         if state == State.KIDNAPPED:
             await set_motors(0, 0)
+        # If we're set back down, delay for a small time and then continue
         elif state == State.WAIT:
             await set_motors(0, 0)
-            if wait_start is not None and time() - wait_start > WT:
-                vision.update_vision(False, True, False)
-                vision.get_tag_pose(4)
-                x = vision.thymio_pose['pose_mm'].flatten()[0]
-                y = vision.thymio_pose['pose_mm'].flatten()[1]
-                theta = vision.thymio_pose['theta']
-                x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
-                start_pose = (x, y, 0, theta, 0)
-
-                cv_data2 = []
-                if vision.obstacles is not None:
-                    cv_data2 = vision.obstacles.copy()
-                cv_data2.append(vision.thymio_pose['pose_mm'].flatten())
-                cv_data2.append(cv_data[-1])
-
-                goals_cv, goals, plotter = init_global_path(cv_data2, ymax)
-                g = 0
-                goal_pose = goals[g]
-
-                ekf = EKF(
-                    np.diag(constants.ekf['move_vars']), 
-                    np.diag(constants.ekf['measure_vars']),
-                    start_pose,
-                    constants.robot['wheel_base'],
-                    constants.general['dt']
-                )
-                pid = PID()
-                local_nav = LocalNav()
-                state_log.append(start_pose)
-                nav_ready = True
-                state = State.GLOBAL_NAV
+            if wait_start is not None and time() - wait_start > constants.kidnapping["wait_time"]:
+                goals_cv, goal_pose, ekf, pid, local_nav, nav_ready, plotter = await wait_after_kidnapping(vision, ymax, cv_data)
+        # If not kidnapped, run normal behaviours
         else:
+            # Make sure everything is reset after kidnapping
             if not nav_ready:
                 sleep_time = constants.general['dt'] - (time()-t)
                 if sleep_time > 0:
                     await client.sleep(sleep_time)
                 continue
-
+            
+            # Get and log current pose
             current_pose, cov_matrix = get_current_pose(ekf, vision, ymax)
             state_log.append(current_pose)
 
-            # Conditions
+            # If we've reached the next waypoint, update to the next
+            # If this was the last, we're done!
             if reached_goal(current_pose, goal_pose):
                 g += 1
                 pid.reset_integrals()
                 if g < len(goals):
-                    print(f"Next goal: {goals[g]}")
                     goal_pose = goals[g]
                 else:
                     print("Reached goal!")
                     state = State.STOP
                     break
+            # If there's an obstacle, switch to local avoidance mode
             elif obstacle_detected(prox) and state == State.GLOBAL_NAV:
                 state = State.LOCAL_NAV
-                print("Local_ nav state")
 
             # Act based on states
             if state == State.GLOBAL_NAV:
@@ -229,6 +158,55 @@ async def init_tdm():
     await node.watch(variables=True)
     node.add_variables_changed_listener(variables_changed)
     print("Initialized")
+
+# Initialize computer vision system
+def init_vision(vision):
+    global node, state
+    goals = None
+    
+    # Repeat initialization until we've successfully found a path
+    while goals is None:
+        # Show image until we tell it to exit
+        while True:
+            # Displau frame
+            vision.update_vision(False, False, False)
+            if vision.frame_disp is not None:
+                cv.imshow('frame', vision.frame_disp)
+                cv.resizeWindow('frame', (DISP_FRAME_W, DISP_FRAME_H))
+
+            # Exit and start program
+            key = cv.waitKey(1) & 0xFF
+            if key == 27:  # ESC -> exit
+                break
+            # Get obstacles
+            if key == ord('h'):
+                vision.update_vision(True, True, True) 
+
+        vision.get_tag_pose(constants.tag_ids['thymio'])
+        vision.get_tag_pose(constants.tag_ids['goal'])
+        cv_data = []
+
+        # Get obstacles and start/end poses from CV
+        if vision.obstacles is None or vision.thymio_pose is None or vision.target_pose is None:
+            print('[VISION] error getting cv_data')
+        else:
+            cv_data = vision.obstacles.copy()
+            cv_data.append(vision.thymio_pose['pose_mm'].flatten())
+            cv_data.append(vision.target_pose['pose_mm'].flatten())
+
+        x = vision.thymio_pose['pose_mm'].flatten()[0]
+        y = vision.thymio_pose['pose_mm'].flatten()[1]
+        theta = vision.thymio_pose['theta']
+
+        # Convert coordinates to robot frame
+        ymax = cv_data[0][1]
+        x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
+        start_pose = (x, y, 0, theta, 0)
+        
+        # Get global path
+        goals_cv, goals, plotter = init_global_path(cv_data, ymax)
+
+    return start_pose, goals_cv, goals, plotter, cv_data, ymax
 
 def init_global_path(cv_data, ymax):
     planner = GlobalPlanner(cv_data, radius=constants.planning['radius'], spacing=constants.planning['spacing'])
@@ -365,6 +343,50 @@ async def global_nav(start_pose, goal_pose, pid: PID):
     tt = time()
     await set_motors(vl, vr)
     #print(f'time for set mot={time()-tt}')
+
+def is_lifted():
+    global node
+    g = node["prox.ground.delta"]
+    return g[0] < constants.kidnapping["lifted_threshold"] and g[1] < constants.kidnapping["lifted_threshold"]
+
+def is_grounded():
+    global node
+    g = node["prox.ground.delta"]
+    return g[0] > constants.kidnapping["grounded_threshold"] and g[1] > constants.kidnapping["grounded_threshold"]
+
+async def wait_after_kidnapping(vision, ymax, cv_data):
+    global node, state
+    vision.update_vision(False, True, False)
+    vision.get_tag_pose(4)
+    x = vision.thymio_pose['pose_mm'].flatten()[0]
+    y = vision.thymio_pose['pose_mm'].flatten()[1]
+    theta = vision.thymio_pose['theta']
+    x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
+    start_pose = (x, y, 0, theta, 0)
+
+    cv_data2 = []
+    if vision.obstacles is not None:
+        cv_data2 = vision.obstacles.copy()
+    cv_data2.append(vision.thymio_pose['pose_mm'].flatten())
+    cv_data2.append(cv_data[-1])
+
+    goals_cv, goals, plotter = init_global_path(cv_data2, ymax)
+    g = 0
+    goal_pose = goals[g]
+
+    ekf = EKF(
+        np.diag(constants.ekf['move_vars']), 
+        np.diag(constants.ekf['measure_vars']),
+        start_pose,
+        constants.robot['wheel_base'],
+        constants.general['dt']
+    )
+    pid = PID()
+    local_nav = LocalNav()
+    nav_ready = True
+    state = State.GLOBAL_NAV
+
+    return goals_cv, goal_pose, ekf, pid, local_nav, nav_ready, plotter
 
 if __name__ == "__main__":
     print("Hello, World!")

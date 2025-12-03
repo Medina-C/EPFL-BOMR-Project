@@ -31,7 +31,7 @@ async def test_velocity_to_motor_input():
 
     delay = 10
 
-    for speed in [75, -75, 75, -75]:
+    for speed in [100, 150, 200, 250]:
 
         v = {
             "motor.left.target": [speed],
@@ -53,8 +53,6 @@ async def test_velocity_to_motor_input():
             pose = vision.thymio_pose['pose_mm'].flatten()
             print(pose)
             await client.sleep(0.05)
-
-      
 
         end_pose = vision.thymio_pose['pose_mm'].flatten()
         print(end_pose)
@@ -441,58 +439,6 @@ async def test_angular_variances():
     plt.title("Positional error")
     plt.show()
 
-async def test_angular_variances_old():
-    global node
-    await init_tdm()
-
-    N = 500
-    target_l = 160
-    target_r = 100
-    target_w = (target_l - target_r)/constants.robot['wheel_base']
-    T = 0.05
-
-    vel_error = []
-    rdata = []
-    ldata = []
-
-    v = {
-        "motor.left.target": [target_l*constants.robot['linear_to_mtr_val']],
-        "motor.right.target": [target_r*constants.robot['linear_to_mtr_val']],
-    }
-    await node.set_variables(v)
-    await client.sleep(1)
-
-    for i in range(N):
-        right = node['motor.right.speed']
-        left = node['motor.left.speed']
-
-        rdata.append(right)
-        ldata.append(left)
-
-        w = (left - right)/constants.robot['wheel_base']
-        vel_error.append(target_w - w)
-        await client.sleep(T)
-
-    print(f'Angular velocity error variance: {np.var(vel_error)}')
-
-    actual_pos = 0
-    ideal_pos = 0
-    pos_error = []
-    for i in range(len(vel_error)):
-        ideal_pos += T*target_w
-        actual_pos += T*(ldata[i] - rdata[i])/constants.robot['wheel_base']
-        pos_error.append([ideal_pos - actual_pos])
-
-    print(pos_error)
-    print(f'Angle error variance: {np.var(pos_error)}')
-
-    plt.subplot(2, 1, 1)
-    plt.hist(vel_error)
-    plt.title("Angular velocity error")
-    plt.subplot(2, 1, 2)
-    plt.hist(pos_error)
-    plt.title("Angle error")
-    plt.show()
 
 def variables_changed(node, variables):
     try:
