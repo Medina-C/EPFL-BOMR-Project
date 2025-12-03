@@ -2,7 +2,7 @@
    so main.py isn't as cluttered'''
 
 general = {
-    'dt': 0.22,
+    'dt': 0.18,
     'goal_buffer': 40,
     'drive_vel': 130*2/3,
     'max_vel': 130*2/3,
@@ -63,8 +63,8 @@ local_avoidance = {
     'clear_threshold': 800,
     'check_interval': 0.05,
     'forward_speed': 160,
-    'turn_speed': 160,
-    'proportional_gain': 0.001,
+    'turn_speed': 130,
+    'proportional_gain': 0.01,
     'target_side_value': 1200,
     'exit_consistent_count': 5,
     'detection_threshold': 1800,

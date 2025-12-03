@@ -9,8 +9,8 @@ class Plotter:
     def _setup_axes(self, ax, title):
         ax.set_xlim(0, self.planner.width)
         ax.set_ylim(self.planner.height, 0)
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
+        ax.set_xlabel("x [mm]")
+        ax.set_ylabel("y [mm]")
         ax.set_aspect("equal", "box")
         ax.set_title(title)
         ax.minorticks_on()
@@ -116,9 +116,22 @@ class Plotter:
         """
         Same plot as path(), but overlays executed trajectory (xs_exec, ys_exec).
         """
+        
 
         fig, ax = plt.subplots()
         self._setup_axes(ax, "Planned vs Executed Path")
+
+        segments = self.planner.segments
+        if segments:
+            xs = [p[0] for p in segments]
+            ys = [p[1] for p in segments]
+            ax.plot(xs, ys, linewidth=1.4, color="tab:blue", zorder=6)
+
+        ax.plot(xs_exec, ys_exec, linewidth=1.6, color="tab:orange", zorder=7)
+
+        if segments:
+            ax.scatter(xs, ys, s=5, color="tab:blue", zorder=6)
+
         self._draw_obstacles(ax)
         self._draw_inflated_and_vertices(ax)
         self._draw_start_goal(ax)
@@ -137,14 +150,7 @@ class Plotter:
                     zorder=2.5,
                 )
 
-        segments = self.planner.segments
-        if segments:
-            xs = [p[0] for p in segments]
-            ys = [p[1] for p in segments]
-            ax.plot(xs, ys, linewidth=1.4, color="tab:blue", zorder=6)
-            ax.scatter(xs, ys, s=5, color="tab:blue", zorder=6)
-
-        ax.plot(xs_exec, ys_exec, linewidth=1.6, color="tab:orange", zorder=7)
+        plt.legend(["Ideal path", "EKF path"])
         # ax.scatter(xs_exec, ys_exec, s=6, color="tab:orange", zorder=8)
 
         # plt.show()

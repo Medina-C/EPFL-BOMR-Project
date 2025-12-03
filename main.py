@@ -35,7 +35,7 @@ async def main():
     cv.namedWindow('frame', cv.WINDOW_NORMAL)
     cv.resizeWindow('frame', DISP_FRAME_W, DISP_FRAME_H)
 
-    start_pose, goals, goals_cv, plotter, cv_data, ymax = init_vision(vision)
+    start_pose, goals_cv, goals, plotter, cv_data, ymax = init_vision(vision)
 
     g = 0
     goal_pose = goals[g]
@@ -57,11 +57,12 @@ async def main():
 
     # Main loop
     while state != State.STOP:
-        t = time()
+        tt = time()
         prox = read_prox(node)
-        
+        t = time()
         vision.update_disp_frame(state_log, goals_cv, cv_data[0][1], cov_matrix)        
         cv.imshow('frame', vision.frame_disp)
+        print(f'time draw={time()-t}')
         cv.resizeWindow('frame', (1920, 1080))
         cv.waitKey(1)
 
@@ -69,11 +70,15 @@ async def main():
         if is_lifted():
             state = State.KIDNAPPED
             nav_ready = False
+            print("kidnapped")
         # Check if we've been un-kidnapped
         elif state == State.KIDNAPPED and is_grounded():
+            print("waiting")
             state = State.WAIT
-            await client.sleep(1)
-            vision.update_vision(True, True, True)
+            # Refresh camera
+            for i in range(3):
+                await client.sleep(1)
+                vision.update_vision(True, True, True)
             wait_start = time()
 
         # If kidnapped, stop
@@ -83,7 +88,9 @@ async def main():
         elif state == State.WAIT:
             await set_motors(0, 0)
             if wait_start is not None and time() - wait_start > constants.kidnapping["wait_time"]:
-                goals_cv, goal_pose, ekf, pid, local_nav, nav_ready, plotter = await wait_after_kidnapping(vision, ymax, cv_data)
+                goals_cv, goals, ekf, pid, local_nav, nav_ready, plotter = await wait_after_kidnapping(vision, ymax, cv_data)
+                g = 0
+                goal_pose = goals[g]
         # If not kidnapped, run normal behaviours
         else:
             # Make sure everything is reset after kidnapping
@@ -119,9 +126,10 @@ async def main():
                 cleared = await local_nav.follow_edge(node, prox)
                 if cleared:
                     state = State.GLOBAL_NAV
-                    print("cleared local nav")
+                    #print("cleared local nav")
             else:
                 print(f"Invalid state {state}!")
+        print(f'time loop={time()-tt}')
 
         # Processing takes ~100 ms. dt is slightly higher -> wait for the remainder
         sleep_time = constants.general['dt'] - (time()-t)
@@ -138,16 +146,12 @@ async def main():
         [s[0] for s in state_log],
         [cv_data[0][1] - s[1] for s in state_log]
     )
-    plt.plot(theta_cv_log)
-    plt.plot([state[3] for state in state_log])
-    plt.legend(['theta cv', 'theta state'])
-    plt.title("theta cv log")
     # plt.figure()
     # plt.plot(a_log)
     # plt.title("a log")
-    plt.show()
-
+    #plt.show()
     pid.plot()
+    plt.show()
 
 # Setup tdm client
 async def init_tdm():
@@ -168,7 +172,7 @@ def init_vision(vision):
     while goals is None:
         # Show image until we tell it to exit
         while True:
-            # Displau frame
+            # Display frame
             vision.update_vision(False, False, False)
             if vision.frame_disp is not None:
                 cv.imshow('frame', vision.frame_disp)
@@ -183,7 +187,7 @@ def init_vision(vision):
                 vision.update_vision(True, True, True) 
 
         vision.get_tag_pose(constants.tag_ids['thymio'])
-        vision.get_tag_pose(constants.tag_ids['goal'])
+        vision.get_tag_pose(constants.tag_ids['target'])
         cv_data = []
 
         # Get obstacles and start/end poses from CV
@@ -213,9 +217,9 @@ def init_global_path(cv_data, ymax):
     plotter = Plotter(planner)
 
     segments_cv = planner.plan()
+    plotter.path()
     if segments_cv is None:
         return None, None, None
-    plotter.path()
     segments_robot = [
         cv_coords_to_robot(p[0], p[1], ymax, p[2])
         for p in segments_cv
@@ -247,11 +251,13 @@ async def set_motors(left_vel, right_vel):
         right_in = -500
 
     #print(left_in, right_in)
-
+    t = time()
     await node.set_variables({
         "motor.left.target": [left_in],
         "motor.right.target": [right_in],
     })
+    print(f'time mot={time()-t}')
+
 
 # Callbacks to run immediately if certain variables are changed
 def variables_changed(node, variables):
@@ -280,8 +286,10 @@ def get_current_pose(ekf: EKF, vision, ymax):
     v = (vl + vr) / 2
     w = (vr - vl) / constants.robot['wheel_base']
 
+    t = time()
     vision.update_vision(False, False, False)
     tag_seen = vision.get_tag_pose(4)
+    print(f'time pose={time()-t}')
 
     if (not tag_seen) and (ekf.tag_seen):
         ekf.tag_seen = False
@@ -356,6 +364,7 @@ def is_grounded():
 
 async def wait_after_kidnapping(vision, ymax, cv_data):
     global node, state
+
     vision.update_vision(False, True, False)
     vision.get_tag_pose(4)
     x = vision.thymio_pose['pose_mm'].flatten()[0]
@@ -371,8 +380,6 @@ async def wait_after_kidnapping(vision, ymax, cv_data):
     cv_data2.append(cv_data[-1])
 
     goals_cv, goals, plotter = init_global_path(cv_data2, ymax)
-    g = 0
-    goal_pose = goals[g]
 
     ekf = EKF(
         np.diag(constants.ekf['move_vars']), 
@@ -386,7 +393,7 @@ async def wait_after_kidnapping(vision, ymax, cv_data):
     nav_ready = True
     state = State.GLOBAL_NAV
 
-    return goals_cv, goal_pose, ekf, pid, local_nav, nav_ready, plotter
+    return goals_cv, goals, ekf, pid, local_nav, nav_ready, plotter
 
 if __name__ == "__main__":
     print("Hello, World!")
@@ -394,6 +401,5 @@ if __name__ == "__main__":
     client.run_async_program(main)
     client.close()
     print("Stopped")
-    print(state)
 
     os._exit(0)
