@@ -85,7 +85,7 @@ class LocalNav():
 def read_prox(node):
     try:
         v = node["prox.horizontal"]
-        # convert to plain list (sometimes it's a memoryview-like)
+    
         return list(v)
     except Exception:
         return [0] * 7
