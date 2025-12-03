@@ -31,6 +31,7 @@ async def main():
     global node, state, wait_start
     await init_tdm() # Initialize Thymio
     
+    # Initialize CV
     vision = Vision(1)
     cv.namedWindow('frame', cv.WINDOW_NORMAL)
     cv.resizeWindow('frame', DISP_FRAME_W, DISP_FRAME_H)

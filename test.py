@@ -16,7 +16,8 @@ async def test_velocity_to_motor_input():
     await init_tdm()
 
     vision = Vision(0)
-     
+    
+    # Use the same vision initialization procedure as in main.py for simplicity
     while True:
         vision.update_vision(False, False, False)
         if vision.frame_disp is not None:
@@ -27,12 +28,14 @@ async def test_velocity_to_motor_input():
         if key == ord('h'):
             vision.update_vision(False, True, True) 
 
-    output = open('outputs/speed_to_mtr_input.csv', 'a')
+    output = open('outputs/speed_to_mtr_input.csv', 'a') # Data output file
 
-    delay = 10
+    delay = 10 # Time to run the robot for at each speed
 
+    # Rerun the test at each different speed 
     for speed in [100, 150, 200, 250]:
 
+        # Set motors
         v = {
             "motor.left.target": [speed],
             "motor.right.target": [speed],
@@ -47,6 +50,7 @@ async def test_velocity_to_motor_input():
         print(start_pose)
 
         t = time()
+        # Need to periodically update vision or else it freezes
         while time()-t < delay:
             vision.update_vision(False, False, False)
             vision.get_tag_pose(4)
@@ -54,9 +58,11 @@ async def test_velocity_to_motor_input():
             print(pose)
             await client.sleep(0.05)
 
+        # Get the robot's final position
         end_pose = vision.thymio_pose['pose_mm'].flatten()
         print(end_pose)
 
+        # Stop motors
         v = {
             "motor.left.target": [0],
             "motor.right.target": [0],
@@ -64,6 +70,7 @@ async def test_velocity_to_motor_input():
         await node.set_variables(v)
         await client.sleep(1)
 
+        # Calculate velocity in mm/s based on distance travelled (from CV)
         distance = np.sqrt((end_pose[0]-start_pose[0])**2 + (end_pose[1]-start_pose[1])**2)
         velocity = distance/delay
 
@@ -71,12 +78,15 @@ async def test_velocity_to_motor_input():
 
     output.close()
 
+# Quick test to see if the robot drives straight
+# Has the robot drive back and forth a few times
 async def test_motor_l_r():
     global node
     await init_tdm()
 
     vision = Vision(0)
-     
+    
+    # Use the same vision initialization procedure as in main.py for simplicity
     while True:
         vision.update_vision(False, False, False)
         if vision.frame_disp is not None:
@@ -87,11 +97,12 @@ async def test_motor_l_r():
         if key == ord('h'):
             vision.update_vision(False, True, True) 
 
-    output = open('outputs/motor_rl_constants2.csv', 'a')
+    output = open('outputs/motor_rl_constants2.csv', 'a') # Output file
 
-    delay = 10
+    delay = 10 # Time to run at each speed
+    # Send the robot back and forth
     for speed in[115, -115, 135, -135, 170, -170, 190, -190]:
-
+        # Set motor speeds
         v = {
             "motor.left.target": [int(speed*0.99)],
             "motor.right.target": [speed],
@@ -105,13 +116,13 @@ async def test_motor_l_r():
         start_th = vision.thymio_pose['theta']
         print(f'start={start_th}')
         t = time()
+
+        # Need to periodically update vision or else it freezes
         while time()-t < delay:
             vision.update_vision(False, False, False)
             vision.get_tag_pose(4)
             pose = vision.thymio_pose['theta']
             await client.sleep(0.05)
-
-      
 
         end_th = vision.thymio_pose['theta']
         print(f'end={end_th}')
@@ -123,97 +134,13 @@ async def test_motor_l_r():
         await node.set_variables(v)
         await client.sleep(1)
 
+        # Output the difference in angle at this speed
         theta_diff = end_th - start_th
         if speed>0:
             output.write(f"{abs(speed)},{theta_diff}\n")
 
     output.close()
 
-async def test_linear_variances_allcv():
-    global node
-    await init_tdm()
-
-    vision = Vision(0)
-     
-    while True:
-        vision.update_vision(True, False, False)
-        if vision.frame_disp is not None:
-            cv.imshow('frame', vision.frame_disp)
-        key = cv.waitKey(1) & 0xFF
-        if key == 27:  # ESC -> exit
-            break
-        if key == ord('h'):
-            vision.update_vision(True, True, True) 
-
-    target_mm = 100
-    target = target_mm*constants.robot['linear_to_mtr_val']
-
-    v = {
-        "motor.left.target": [int(target*0.99)],
-        "motor.right.target": [int(target)],
-    }
-    await node.set_variables(v)
-    await client.sleep(1)
-
-    delay = 5
-
-    pos_log = [0]
-    vel_error = []
-    pos_error = []
-    rdata = []
-    ldata = []
-    time_log = [time()]
-
-    vision.get_tag_pose(4)
-    start_pose = vision.thymio_pose['pose_mm'].flatten()
-
-    while time_log[-1] - time_log[0] < delay:
-        vision.update_vision(False, False, False)
-        vision.get_tag_pose(4)
-        time_log.append(time())
-        vel_cv = vision.get_tag_velocity(4)['speed_mm_s']
-
-        right = node['motor.right.speed']*constants.robot['mtr_val_to_linear']
-        left = node['motor.left.speed']*constants.robot['mtr_val_to_linear']
-
-        rdata.append(right)
-        ldata.append(left)
-
-        vel_robot = (right + left)/2
-        vel_error.append(vel_cv - vel_robot)
-
-        print(f'Robot vel: {vel_robot}, CV vel: {vel_cv}, Error: {vel_cv - vel_robot}')
-
-        dt = time_log[-1] - time_log[-2]
-        pos_robot = pos_log[-1] + vel_robot*dt
-
-        dx = start_pose[0] - vision.thymio_pose['pose_mm'].flatten()[0]
-        dy = start_pose[1] - vision.thymio_pose['pose_mm'].flatten()[1]
-
-        pos_cv = np.sqrt(dx*2 + dy*2)
-        pos_log.append(pos_cv)
-        pos_error.append(pos_cv - pos_robot)
-
-        print(f'Robot pos: {pos_robot}, CV pos: {pos_cv}, Error: {pos_cv - pos_robot}')
-        await client.sleep(0.05)
-    
-    v = {
-        "motor.left.target": [0],
-        "motor.right.target": [0],
-    }
-    await node.set_variables(v)
-    await client.sleep(1)
-
-    print(f'Velocity error variance: {np.var(vel_error)}')
-    print(f'Positional error variance: {np.var(pos_error)}')
-
-    plt.subplot(2, 1, 1)
-    plt.hist(vel_error)
-    plt.title("Velocity error")
-    plt.subplot(2, 1, 2)
-    plt.hist(pos_error)
-    plt.title("Positional error")
-    plt.show()
 
 # Plot velocity profile to see how long acceleration takes
 async def observe_accel():
@@ -222,6 +149,7 @@ async def observe_accel():
 
     speed = 400
 
+    # Set motors to target speed
     v = {
         "motor.left.target": [speed],
         "motor.right.target": [speed],
@@ -234,29 +162,35 @@ async def observe_accel():
     logs = [[], []]
     x = []
 
+    # Periodically log actual speed
     while time()-start < 5: 
         x.append(time()-start)
         logs[0].append(node["motor.left.speed"])
         logs[1].append(node["motor.right.speed"])
         await client.sleep(0.05)
 
+    # Stop motors
     v = {
         "motor.left.target": [0],
         "motor.right.target": [0],
     }
     await node.set_variables(v)
 
+    # Plot speed vs time
     plt.plot(x, logs[0])
     plt.plot(x, logs[1])
     plt.legend(["left", "right"])
     plt.show()
     
+# Function to test the linear positional and velocity error variances
+# from the robot motion model
 async def test_linear_variances():
     global node
     await init_tdm()
 
     vision = Vision(1)
-     
+    
+    # Use the same vision initialization procedure as in main.py for simplicity
     while True:
         vision.update_vision(True, False, False)
         if vision.frame_disp is not None:
@@ -268,6 +202,7 @@ async def test_linear_variances():
             vision.update_vision(True, True, True) 
     vision.get_tag_pose(4)
 
+    # Target speed, convert to robot units and set motors
     target_mm = 100
     target_robot = target_mm*constants.robot['linear_to_mtr_val']
 
@@ -278,25 +213,29 @@ async def test_linear_variances():
     await node.set_variables(v)
     await client.sleep(1)
 
+    # Arrays for error logging
     vel_error = []
     pos_error = []
     rdata = []
     ldata = []
 
-    delay = 8
+    delay = 8 # Length of tiem to run the test
 
-    time_log = [time()]
+    time_log = [time()] # Time log for dt in motion model
+
+    # Set starting pose
     vision.update_vision(False, False, False)
     vision.get_tag_pose(4)
-
     start_pose = vision.thymio_pose['pose_mm'].flatten()
-    prev_cv_pos = 0
+    prev_cv_pos = 0 # We're calculating absolute distance, so we start at 0mm
 
     output = open('outputs/robot_errors.csv', 'a')
 
     await client.sleep(0.1)
 
+    # Run motors until time is up
     while time_log[-1] - time_log[0] < delay:
+        # Get robot actual motor speeds
         right = node['motor.right.speed']
         left = node['motor.left.speed']
         time_log.append(time())
@@ -304,21 +243,24 @@ async def test_linear_variances():
         rdata.append(right)
         ldata.append(left)
 
+        # Calculate velocity in mm/s from motor speeds
         vel = (right + left)/2*constants.robot['mtr_val_to_linear']
         vel_error.append(target_mm - vel)
 
+        # Get current CV position
         vision.update_vision(False, False, False)
         vision.get_tag_pose(4)
 
-
+        # Calculate distance travelled (according to CV "ground truth")
         dx = start_pose[0] - vision.thymio_pose['pose_mm'].flatten()[0]
         dy = start_pose[1] - vision.thymio_pose['pose_mm'].flatten()[1]
-
         pos_cv = np.sqrt(dx**2 + dy**2)
+
+        # Calculate distance travelled according to robot motion model
         pos_robot = prev_cv_pos + vel*(time_log[-1] - time_log[-2])
         print(pos_cv, pos_robot, vel, time_log[-1] - time_log[-2])
 
-        # Skip first one because something weird is happening with the get_tag_pose() timing
+        # Skip first one, vision intialization makes the data bad
         if prev_cv_pos != 0:
             pos_error.append(pos_cv - pos_robot)
 
@@ -328,6 +270,7 @@ async def test_linear_variances():
 
         await client.sleep(0.1)
 
+    # Stop motors
     v = {
         "motor.left.target": [0],
         "motor.right.target": [0],
@@ -339,6 +282,7 @@ async def test_linear_variances():
 
     print(f'Positional error variance: {np.var(pos_error)}')
 
+    # Plot errors (but we collect data from multiple tests and do the final analysis in Excel)
     plt.subplot(2, 1, 1)
     plt.hist(vel_error)
     plt.title("Velocity error")

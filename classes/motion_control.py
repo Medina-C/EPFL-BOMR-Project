@@ -116,7 +116,7 @@ class PID:
         plt.title("Motor inputs")
         plt.legend(['left', 'right'])
         plt.xlabel("Time step k")
-        plt.ylabel("Magnitude [rad]")
+        plt.ylabel("Motor speed [mm/s]")
 
         #plt.show()
         
