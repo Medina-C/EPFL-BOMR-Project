@@ -350,11 +350,12 @@ def obstacle_detected(prox):
     far_right = prox[IDX_NE]  # Far right sensor
         
     # Check all front-facing sensors including far left and far right
-    return (front >= DETECTION_THRESHOLD or 
-            front_left >= DETECTION_THRESHOLD or 
-            front_right >= DETECTION_THRESHOLD or
-            far_left >= DETECTION_THRESHOLD or
-            far_right >= DETECTION_THRESHOLD)
+    detection_threshold = constants.local_avoidance['detection_threshold']
+    return (front >= detection_threshold or 
+            front_left >= detection_threshold or 
+            front_right >= detection_threshold or
+            far_left >= detection_threshold or
+            far_right >= detection_threshold)
 
 async def global_nav(start_pose, goal_pose, pid: PID):
     global a_log

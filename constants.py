@@ -57,20 +57,25 @@ kidnapping = {
     "wait_time": 4
 }
 
+# Sensor indices for prox.horizontal (front arc only)
 IDX_NO = 0
 IDX_NNO = 1
 IDX_FRONT = 2
 IDX_NNE = 3
 IDX_NE = 4
-DETECTION_THRESHOLD = 1800   # obstacle detection threshold for all sensors (lower = earlier detection when farther away)
-SIDE_THRESHOLD = 1000
-CLEAR_THRESHOLD = 800
-CHECK_INTERVAL = 0.05    # seconds between loop iterations
-FORWARD_SPEED = 160      # forward speed
-TURN_SPEED = 160         # turning base speed used in corrections
-PROPORTIONAL_GAIN = 0.0005  # proportional gain for side error -> motor differential (reduced to minimize turning)
-TARGET_SIDE_VALUE = 1000  # desired side prox reading while following (tunable)
-EXIT_CONSISTENT_COUNT = 6  # number of consecutive "clear" readings to exit
+
+local_avoidance = {
+    'front_threshold': 1600,
+    'clear_threshold': 800,
+    'check_interval': 0.05,
+    'forward_speed': 160,
+    'turn_speed': 160,
+    'proportional_gain': 0.001,
+    'target_side_value': 1200,
+    'exit_consistent_count': 5,
+    'detection_threshold': 1800,
+    'side_threshold': 1000,
+}
 
 # Adrien CV
 MAP_W = 1260    #in mm
