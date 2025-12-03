@@ -1,7 +1,7 @@
 import numpy as np
 
-from planner import GlobalPlanner
-from plotter import Plotter
+from classes.gp import GlobalPlanner
+from classes.gp import Plotter
 
 RADIUS = 2.0
 SPACING = 5.0
