@@ -93,13 +93,16 @@ class PID:
         # print(vl, vr)
         return vl, vr
     
+    # We want to reset integrals at each waypoint
     def reset_integrals(self):
         self.sum_beta_error = 0
         self.sum_theta_error = 0
 
+    # Plot useful variables 
     def plot(self):
         plt.figure(figsize=[6.4, 7])
 
+        # Plotting all errors we use (theta P, and beta PID)
         plt.subplot(2, 1, 1)
         plt.plot(self.theta_log)
         plt.plot(self.beta_log)
@@ -110,6 +113,7 @@ class PID:
         #plt.xlabel("Time step k")
         plt.ylabel("Magnitude [rad]")
 
+        # Plot motor inputs over time
         plt.subplot(2, 1, 2)
         plt.plot(self.vl_log)
         plt.plot(self.vr_log)

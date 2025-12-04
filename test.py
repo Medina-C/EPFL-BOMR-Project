@@ -262,6 +262,7 @@ async def test_linear_variances():
 
         # Skip first one, vision intialization makes the data bad
         if prev_cv_pos != 0:
+            # Calculate and output positional error
             pos_error.append(pos_cv - pos_robot)
 
             output.write(f'{vel_error[-1]},{pos_error[-1]}\n')
@@ -291,12 +292,15 @@ async def test_linear_variances():
     plt.title("Positional error")
     plt.show()
 
+# Function to test the angular and angular velocity variances
+# from the robot motion model
 async def test_angular_variances():
     global node
     await init_tdm()
 
     vision = Vision(1)
      
+    # Use the same vision initialization procedure as in main.py for simplicity
     while True:
         vision.update_vision(True, False, False)
         if vision.frame_disp is not None:
@@ -308,35 +312,41 @@ async def test_angular_variances():
             vision.update_vision(True, True, True) 
     vision.get_tag_pose(4)
 
+    # Target speeds, convert to robot units and set motors
     target_l = 160
     target_r = 90
-    target_w = (target_l - target_r)/constants.robot['wheel_base']
+    target_w = (target_l - target_r)/constants.robot['wheel_base'] # Target/theoretical angular vleocity
 
     v = {
         "motor.left.target": [int(target_l*0.99*constants.robot['linear_to_mtr_val'])],
         "motor.right.target": [int(target_r*constants.robot['linear_to_mtr_val'])],
     }
     await node.set_variables(v)
+
+    # Wait for acceleration
     await client.sleep(1)
 
+    # Error logs
     w_error = []
     theta_error = []
     rdata = []
     ldata = []
 
-    delay = 30
+    delay = 30 # Time to run test for (it can be long because the robot's going in circles)
 
     time_log = [time()]
     vision.update_vision(False, False, False)
-    vision.get_tag_pose(4)
+    vision.get_tag_pose(4) # Get robot starting position
 
     prev_cv_theta = vision.thymio_pose['theta']
 
-    output = open('outputs/robot_errors.csv', 'a')
+    output = open('outputs/robot_errors.csv', 'a') # Output file
 
     await client.sleep(0.1)
 
+    # Collect data until time is up
     while time_log[-1] - time_log[0] < delay:
+        # Get current wheel speeds
         right = node['motor.right.speed']
         left = node['motor.left.speed']
         time_log.append(time())
@@ -344,19 +354,23 @@ async def test_angular_variances():
         rdata.append(right)
         ldata.append(left)
 
+        # Convert to actual angular velocity
         w = (left - right)/constants.robot['wheel_base']*constants.robot['mtr_val_to_linear']
-        w_error.append(target_w - w)
+        w_error.append(target_w - w) # Calculate angular velocity error
 
+        # Get actual robot angle
         vision.update_vision(False, False, False)
         vision.get_tag_pose(4)
 
         theta_cv = vision.thymio_pose['theta']
 
+        # Calculate angle from robot motion model
         theta_robot = prev_cv_theta + w*(time_log[-1] - time_log[-2])
         print(theta_cv, theta_robot, w, time_log[-1] - time_log[-2])
 
-        # Skip first one because something weird is happening with the get_tag_pose() timing
+        # Skip first one, vision intialization makes the data bad
         if prev_cv_theta != 0:
+            # Calculate and output angular error
             theta_error.append(theta_cv - theta_robot)
             output.write(f'{w_error[-1]},{theta_error[-1]}\n')
 
@@ -364,6 +378,7 @@ async def test_angular_variances():
 
         await client.sleep(0.1)
 
+    # Stop motors
     v = {
         "motor.left.target": [0],
         "motor.right.target": [0],
@@ -375,6 +390,7 @@ async def test_angular_variances():
 
     print(f'Positional error variance: {np.var(theta_error)}')
 
+    # Plot errors (but we collect data from multiple tests and do the final analysis in Excel)
     plt.subplot(2, 1, 1)
     plt.hist(w_error)
     plt.title("Velocity error")
@@ -410,6 +426,7 @@ async def set_motors(left_vel, right_vel):
     right_in = int(right_vel * constants.robot['linear_to_mtr_val'])
     # print(left_in, right_in)
 
+    # Saturate at input limits
     if left_in > 500:
         left_in = 500
     elif left_in < -500:
@@ -430,7 +447,7 @@ async def set_motors(left_vel, right_vel):
 if __name__ == "__main__":
     print("Hello, World!")
     client = ClientAsync()
-    client.run_async_program(test_angular_variances)
+    client.run_async_program(test_angular_variances) # Select which test to run
     client.close()
     print("stopped")
 
