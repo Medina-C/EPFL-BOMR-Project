@@ -114,7 +114,7 @@ class Plotter:
 
     def paths(self, xs_exec, ys_exec):
         """
-        Same plot as path(), but overlays executed trajectory (xs_exec, ys_exec).
+        Same plot as path() but overlays executed trajectory.
         """
         
 

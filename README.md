@@ -41,8 +41,6 @@ Once the virtual environment is active, install all project requirements:
 pip install -r requirements.txt
 ```
 
-All experiments and results were obtained using the pinned dependency versions specified in `requirements.txt.`
+## Running the Demo
 
-## Running the Demo 
-
-TODO
+The demo can be ran by executing the `main.py` file. If camera isn't loading, change its index in `Vision()` (`main.py`, usually 1 or 2) or disable `cv.CAP_DSHOW` in `classes/cv/vision.py`. Make sure to go over `main.ipynb` first.
