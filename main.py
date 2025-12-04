@@ -63,7 +63,6 @@ async def main():
         t = time()
         vision.update_disp_frame(state_log, goals_cv, cv_data[0][1], cov_matrix)        
         cv.imshow('frame', vision.frame_disp)
-        print(f'time draw={time()-t}')
         cv.resizeWindow('frame', (1920, 1080))
         cv.waitKey(1)
 
@@ -213,20 +212,26 @@ def init_vision(vision):
 
     return start_pose, goals_cv, goals, plotter, cv_data, ymax
 
+# Get the global path using the CV obstacle data
 def init_global_path(cv_data, ymax):
+    # Initialize path planner
     planner = GlobalPlanner(cv_data, radius=constants.planning['radius'], spacing=constants.planning['spacing'])
     plotter = Plotter(planner)
 
+    # Generate nad plot path
     segments_cv = planner.plan()
     plotter.path()
     if segments_cv is None:
         return None, None, None
+    
+    # Convert waypoints to robot coordinates
     segments_robot = [
         cv_coords_to_robot(p[0], p[1], ymax, p[2])
         for p in segments_cv
     ]
     return segments_cv, segments_robot, plotter
 
+# Converstion between CV coordinates and robot world coordinates
 def cv_coords_to_robot(x, y, ymax, th=None):
     if th is None: 
         return x, ymax-y
@@ -240,8 +245,8 @@ async def set_motors(left_vel, right_vel):
 
     left_in = int(left_vel * constants.robot['linear_to_mtr_val'])
     right_in = int(right_vel * constants.robot['linear_to_mtr_val'])
-    # print(left_in, right_in)
 
+    # Saturate to allowed range
     if left_in > 500:
         left_in = 500
     elif left_in < -500:
@@ -251,19 +256,18 @@ async def set_motors(left_vel, right_vel):
     elif right_in < -500:
         right_in = -500
 
-    #print(left_in, right_in)
-    t = time()
+    # Set motors
     await node.set_variables({
         "motor.left.target": [left_in],
         "motor.right.target": [right_in],
     })
-    print(f'time mot={time()-t}')
 
 
 # Callbacks to run immediately if certain variables are changed
 def variables_changed(node, variables):
     global state
     try:
+        # Stop robot if middle button is pressed
         stop = variables["button.center"]
         if stop:
             state = State.STOP
@@ -274,9 +278,9 @@ def variables_changed(node, variables):
 theta_cv_log = []
 
 # Use the EKF to update the current estimated pose
-# TODO replace measurements with CV measurements
 def get_current_pose(ekf: EKF, vision, ymax):
     global node, theta_cv_log
+    # Get current motor speeds, use as inputs to EKF
     vl = node['motor.left.speed'] * constants.robot['mtr_val_to_linear']
     vr = node['motor.right.speed'] * constants.robot['mtr_val_to_linear']
     inputs = np.array([
@@ -288,10 +292,13 @@ def get_current_pose(ekf: EKF, vision, ymax):
     w = (vr - vl) / constants.robot['wheel_base']
 
     t = time()
+
+    # Get robot tag pose
     vision.update_vision(False, False, False)
     tag_seen = vision.get_tag_pose(4)
-    print(f'time pose={time()-t}')
 
+    # If the camera has just been covered or uncovered,
+    # update the measurement covariance matrix appropriately
     if (not tag_seen) and (ekf.tag_seen):
         ekf.tag_seen = False
         ekf.R = np.eye(3)*999999
@@ -301,6 +308,8 @@ def get_current_pose(ekf: EKF, vision, ymax):
         ekf.R = np.diag(constants.ekf['measure_vars'])
         #print(f"Tag visible, setting R={ekf.R}")
 
+    # Extract measurements from robot tag pose, and convert 
+    # to robot coordinate frame
     x = vision.thymio_pose['pose_mm'].flatten()[0]
     y = vision.thymio_pose['pose_mm'].flatten()[1]
     theta = vision.thymio_pose['theta']
@@ -314,10 +323,12 @@ def get_current_pose(ekf: EKF, vision, ymax):
         theta,
     ]
 
+    # Get next state estimate and covariance from EKF
     state_estimate, cov_matrix = ekf.generate_next_state(inputs, measurements)
 
     return state_estimate, cov_matrix
 
+# Check whether we're within our buffer zone to the goal
 def reached_goal(current, goal):
     px, py = current[0], current[1]
     gx, gy = goal[0], goal[1]
@@ -327,6 +338,7 @@ def reached_goal(current, goal):
     return (abs(px - gx) < constants.general['goal_buffer'] and
         abs(py - gy) < constants.general['goal_buffer'])
 
+# Check if any front sensors detect a local obstacle
 def obstacle_detected(prox):
     front = prox[IDX_FRONT]
     left = max(prox[IDX_NO], prox[IDX_NNO])
@@ -344,6 +356,7 @@ def obstacle_detected(prox):
             far_left >= detection_threshold or
             far_right >= detection_threshold)
 
+# Use PID to get the motor speeds required to continue along the path
 async def global_nav(start_pose, goal_pose, pid: PID):
     global a_log
     #vl, vr, a = do_astolfi_cl(start_pose, goal_pose)
@@ -353,19 +366,23 @@ async def global_nav(start_pose, goal_pose, pid: PID):
     await set_motors(vl, vr)
     #print(f'time for set mot={time()-tt}')
 
+# Check if the robot has been kidnapped (lifted off the ground)
 def is_lifted():
     global node
     g = node["prox.ground.delta"]
     return g[0] < constants.kidnapping["lifted_threshold"] and g[1] < constants.kidnapping["lifted_threshold"]
 
+# Check if the kidnapping is over (robot is back on the ground)
 def is_grounded():
     global node
     g = node["prox.ground.delta"]
     return g[0] > constants.kidnapping["grounded_threshold"] and g[1] > constants.kidnapping["grounded_threshold"]
 
+# Reinitialize everything after the post-kidnapping wait time is over
 async def wait_after_kidnapping(vision, ymax, cv_data):
     global node, state
 
+    # Update vision and get new robot starting position
     vision.update_vision(False, True, False)
     vision.get_tag_pose(4)
     x = vision.thymio_pose['pose_mm'].flatten()[0]
@@ -374,6 +391,7 @@ async def wait_after_kidnapping(vision, ymax, cv_data):
     x, y, theta = cv_coords_to_robot(x, y, ymax, theta)
     start_pose = (x, y, 0, theta, 0)
 
+    # Use updated vision to generate a new global map
     cv_data2 = []
     if vision.obstacles is not None:
         cv_data2 = vision.obstacles.copy()
@@ -382,6 +400,7 @@ async def wait_after_kidnapping(vision, ymax, cv_data):
 
     goals_cv, goals, plotter = init_global_path(cv_data2, ymax)
 
+    # Reinitialize control classes
     ekf = EKF(
         np.diag(constants.ekf['move_vars']), 
         np.diag(constants.ekf['measure_vars']),
