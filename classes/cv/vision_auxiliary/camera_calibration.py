@@ -1,6 +1,9 @@
 import cv2
 import numpy as np
 
+
+# this file has been largely adapted from online forums and the OpenCV documentation
+
 #create charuco board with 4x4cm chessboard square size
 dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_100)
 charuco_board = cv2.aruco.CharucoBoard((5, 7), 0.04, 0.02, dictionary)
@@ -10,7 +13,7 @@ board_img = charuco_board.generateImage((1000, 1400))
 cv2.imwrite('charuco_board.png', board_img)
 
 #collect images from camera
-cap = cv2.VideoCapture(1)       #change from 0 or 1 depending one number of connected cameras
+cap = cv2.VideoCapture(1)
 all_corners = []
 all_ids = []
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
@@ -81,7 +84,6 @@ if len(all_corners) > 5:
 else:
     print('not enough valid frames for calibration')
 
-#print calibration error
 print(f'calibration error={ret}')
 
 #save parameters
